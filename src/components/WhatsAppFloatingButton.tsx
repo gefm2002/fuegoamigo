@@ -4,7 +4,7 @@ export function WhatsAppFloatingButton() {
   return (
     <button
       onClick={() => openWhatsApp('Hola! Quiero hacer una consulta.')}
-      className="fixed bottom-6 right-6 z-50 bg-accent text-secondary p-4 rounded-full shadow-lg hover:bg-accent/90 transition-all hover:scale-110"
+      className="fixed bottom-6 right-6 z-[120] bg-accent text-secondary p-4 rounded-full shadow-lg hover:bg-accent/90 transition-all hover:scale-110"
       aria-label="Contactar por WhatsApp"
     >
       <svg

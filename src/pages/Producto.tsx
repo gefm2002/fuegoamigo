@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCart } from '../cart/useCart';
+import { useCartDrawer } from '../context/CartDrawerContext';
 import { useProducts } from '../hooks/useData';
 
 export function Producto() {
@@ -8,6 +9,7 @@ export function Producto() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { addItem } = useCart();
+  const { openDrawer } = useCartDrawer();
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
 
@@ -38,7 +40,7 @@ export function Producto() {
       notes: notes || undefined,
       image: product.image,
     });
-    navigate('/tienda');
+    openDrawer();
   };
 
   return (

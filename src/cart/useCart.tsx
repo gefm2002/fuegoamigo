@@ -23,7 +23,7 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-const STORAGE_KEY = 'fuegoamigo_cart';
+const STORAGE_KEY = 'pg_cart';
 
 const getItemKey = (item: CartItem) => `${item.id}:${item.variant ?? ''}`;
 

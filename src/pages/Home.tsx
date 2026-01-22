@@ -59,7 +59,7 @@ export function Home() {
       </section>
 
       {/* Servicios */}
-      <section className="py-16 bg-bg-soft">
+      <section id="servicios" className="py-16 bg-bg-soft scroll-mt-20">
         <div className="container mx-auto px-4">
           <h2 className="font-display text-3xl md:text-4xl text-secondary text-center mb-12">
             Servicios
@@ -288,7 +288,7 @@ export function Home() {
       </section>
 
       {/* FAQs */}
-      <section className="py-16 bg-primary">
+      <section id="faqs" className="py-16 bg-primary scroll-mt-20">
         <div className="container mx-auto px-4 max-w-3xl">
           <h2 className="font-display text-3xl md:text-4xl text-secondary text-center mb-12">
             Preguntas Frecuentes
@@ -310,7 +310,7 @@ export function Home() {
       </section>
 
       {/* Contacto */}
-      <section className="py-16 bg-bg-soft">
+      <section id="contacto" className="py-16 bg-bg-soft scroll-mt-20">
         <div className="container mx-auto px-4">
           <h2 className="font-display text-3xl md:text-4xl text-secondary text-center mb-12">
             Contacto

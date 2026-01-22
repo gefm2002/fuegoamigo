@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { Product } from '../types';
 import { useCart } from '../cart/useCart';
+import { useCartDrawer } from '../context/CartDrawerContext';
 
 interface ProductCardProps {
   product: Product;
@@ -8,6 +9,7 @@ interface ProductCardProps {
 
 export function ProductCard({ product }: ProductCardProps) {
   const { addItem } = useCart();
+  const { openDrawer } = useCartDrawer();
 
   const handleAddToCart = () => {
     addItem({
@@ -17,6 +19,7 @@ export function ProductCard({ product }: ProductCardProps) {
       qty: 1,
       image: product.image,
     });
+    openDrawer();
   };
 
   return (

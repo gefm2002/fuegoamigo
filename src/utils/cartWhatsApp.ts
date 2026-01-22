@@ -2,9 +2,7 @@ import type { CartItem } from '../cart/useCart';
 
 type CustomerInfo = {
   name: string;
-  phone: string;
-  address?: string;
-  deliveryMethod: 'retiro' | 'envio';
+  zone?: string;
   paymentMethod:
     | 'efectivo'
     | 'tarjeta'
@@ -31,35 +29,39 @@ export const buildCartMessage = (items: CartItem[], total: number, info: Custome
     'billeteras-qr': 'Billeteras QR',
   };
 
+  // Saludo con nombre del cliente
   const lines = [
-    '🍖 *PEDIDO FUEGO AMIGO*',
+    `Hola ${info.name}! 👋`,
     '',
-    '*Detalle:*',
-    ...items.map((item) => {
-      const variant = item.variant ? ` (${item.variant})` : '';
-      const subtotal = item.price * item.qty;
-      const note = item.notes ? ` | Aclaraciones: ${item.notes}` : '';
-      return `• ${item.qty}x ${item.name}${variant} - $${subtotal.toLocaleString('es-AR')}${note}`;
-    }),
-    '',
-    `*Total: $${total.toLocaleString('es-AR')}*`,
-    '',
-    `*Cliente:* ${info.name}`,
-    `*Teléfono:* ${info.phone}`,
-    `*Método:* ${info.deliveryMethod === 'retiro' ? 'Retiro' : 'Consultar envío'}`,
-    `*Medio de pago:* ${paymentLabels[info.paymentMethod]}`,
   ];
 
-  if (info.address && info.deliveryMethod === 'envio') {
-    lines.push(`*Dirección:* ${info.address}`);
+  // Zona/barrio si se completó
+  if (info.zone) {
+    lines.push(`Zona/Barrio: ${info.zone}`);
+    lines.push('');
   }
 
-  if (info.notes) {
-    lines.push(`*Observaciones:* ${info.notes}`);
-  }
+  // Lista de productos
+  lines.push('*Productos:*');
+  items.forEach((item) => {
+    const variant = item.variant ? ` (${item.variant})` : '';
+    const subtotal = item.price * item.qty;
+    lines.push(`${item.qty}x ${item.name}${variant} - $${subtotal.toLocaleString('es-AR')}`);
+  });
 
+  // Total estimado
   lines.push('');
-  lines.push('Gracias por tu pedido! 🔥');
+  lines.push(`*Total estimado: $${total.toLocaleString('es-AR')}*`);
+
+  // Medio de pago
+  lines.push('');
+  lines.push(`*Medio de pago:* ${paymentLabels[info.paymentMethod]}`);
+
+  // Notas si hay
+  if (info.notes) {
+    lines.push('');
+    lines.push(`*Notas:* ${info.notes}`);
+  }
 
   return lines.join('\n');
 };

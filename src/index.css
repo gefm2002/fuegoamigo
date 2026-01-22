@@ -10,6 +10,10 @@
     @apply border-neutral-700;
   }
   
+  html {
+    scroll-behavior: smooth;
+  }
+  
   body {
     @apply bg-primary text-secondary font-sans antialiased;
     margin: 0;
