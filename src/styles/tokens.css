@@ -1,0 +1,14 @@
+:root {
+  --color-primary: #0B0B0D;
+  --color-secondary: #F2F2F2;
+  --color-accent: #C92A3A;
+  --color-neutral-900: #141417;
+  --color-neutral-700: #2A2A2E;
+  --color-neutral-500: #6E6E73;
+  --color-neutral-300: #B9B9BD;
+  --color-neutral-100: #E8E8EA;
+  --color-bg-soft: #0F1012;
+  
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-sans: 'Inter', sans-serif;
+}

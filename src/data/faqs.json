@@ -1,0 +1,52 @@
+[
+  {
+    "id": "faq-01",
+    "question": "¿Con cuánta anticipación reservo?",
+    "answer": "Te recomendamos reservar con al menos 7 días de anticipación para eventos grandes y 3 días para eventos chicos o boxes. Para urgencias, consultanos igual y vemos qué podemos armar."
+  },
+  {
+    "id": "faq-02",
+    "question": "¿Hacen eventos chicos?",
+    "answer": "Sí, trabajamos eventos desde 10 personas. También hacemos boxes y picadas para grupos más chicos o individuales."
+  },
+  {
+    "id": "faq-03",
+    "question": "¿Trabajan en CABA y GBA?",
+    "answer": "Sí, trabajamos en CABA y GBA. Para zonas más alejadas consultanos y evaluamos el traslado según el tipo de evento."
+  },
+  {
+    "id": "faq-04",
+    "question": "¿Opciones vegetarianas o sin TACC?",
+    "answer": "Sí, tenemos opciones vegetarianas y podemos adaptar menús sin TACC. Avisanos al momento de la consulta para armar el menú adecuado."
+  },
+  {
+    "id": "faq-05",
+    "question": "¿Incluye personal y vajilla?",
+    "answer": "Depende del tipo de servicio. En catering completo incluimos personal de servicio y vajilla. En foodtruck y boxes, consultanos según tu necesidad."
+  },
+  {
+    "id": "faq-06",
+    "question": "¿Cómo funciona el foodtruck?",
+    "answer": "El foodtruck se instala en tu evento y trabajamos con menú a la carta o combos. Ideal para ferias, eventos al aire libre y reuniones grandes."
+  },
+  {
+    "id": "faq-07",
+    "question": "¿Se puede armar un menú a medida?",
+    "answer": "Sí, armamos menús personalizados según tus gustos, presupuesto y tipo de evento. Contanos qué tenés en mente y lo diseñamos juntos."
+  },
+  {
+    "id": "faq-08",
+    "question": "¿Cómo es la entrega de boxes?",
+    "answer": "Los boxes se pueden retirar en nuestro punto de entrega o coordinamos envío a domicilio en CABA y GBA. Consultanos por zonas y costos."
+  },
+  {
+    "id": "faq-09",
+    "question": "¿Qué medios de pago aceptan?",
+    "answer": "Aceptamos efectivo, transferencia bancaria, Mercado Pago, MODO y billeteras QR. También tenemos promociones bancarias con reintegros."
+  },
+  {
+    "id": "faq-10",
+    "question": "¿Cómo confirmo la fecha?",
+    "answer": "Una vez que coordinamos presupuesto y detalles, te enviamos un presupuesto formal. Con el 50% de seña confirmás la fecha. El resto se paga el día del evento."
+  }
+]

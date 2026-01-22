@@ -1,0 +1,56 @@
+[
+  {
+    "id": "promo-01",
+    "banco": "Banco Nación",
+    "dia": "Jueves",
+    "topeReintegro": 12000,
+    "porcentaje": 25,
+    "medios": ["crédito", "débito"],
+    "vigencia": "Hasta 31/12/2024"
+  },
+  {
+    "id": "promo-02",
+    "banco": "MODO",
+    "dia": "Sábados",
+    "topeReintegro": 10000,
+    "porcentaje": 20,
+    "medios": ["MODO"],
+    "vigencia": "Hasta 31/12/2024"
+  },
+  {
+    "id": "promo-03",
+    "banco": "Banco Provincia",
+    "dia": "Viernes",
+    "topeReintegro": 15000,
+    "porcentaje": 30,
+    "medios": ["crédito", "débito"],
+    "vigencia": "Hasta 31/12/2024"
+  },
+  {
+    "id": "promo-04",
+    "banco": "Banco Santander",
+    "dia": "Miércoles",
+    "topeReintegro": 8000,
+    "porcentaje": 20,
+    "medios": ["crédito"],
+    "vigencia": "Hasta 31/12/2024"
+  },
+  {
+    "id": "promo-05",
+    "banco": "Banco Galicia",
+    "dia": "Martes",
+    "topeReintegro": 10000,
+    "porcentaje": 25,
+    "medios": ["crédito", "débito"],
+    "vigencia": "Hasta 31/12/2024"
+  },
+  {
+    "id": "promo-06",
+    "banco": "Banco BBVA",
+    "dia": "Lunes",
+    "topeReintegro": 12000,
+    "porcentaje": 25,
+    "medios": ["crédito"],
+    "vigencia": "Hasta 31/12/2024"
+  }
+]

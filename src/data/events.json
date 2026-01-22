@@ -1,0 +1,134 @@
+[
+  {
+    "id": "evento-01",
+    "title": "Cumple 40, Parrilla y Ahumados",
+    "eventType": "Social",
+    "location": "Villa Crespo, CABA",
+    "guestsRange": "40-50 personas",
+    "highlightMenu": "Parrilla completa, brisket ahumado, costillas BBQ, finger food",
+    "description": "Evento íntimo con servicio de parrilla en vivo y ahumados premium.",
+    "images": ["/images/gallery-bbq-01.jpg", "/images/gallery-bbq-02.jpg"],
+    "isActive": true
+  },
+  {
+    "id": "evento-02",
+    "title": "Evento Corporativo, Mesa de Finger Food",
+    "eventType": "Corporativo",
+    "location": "Palermo, CABA",
+    "guestsRange": "80-100 personas",
+    "highlightMenu": "Mesa de finger food variada, canapés premium, postres",
+    "description": "Lunch corporativo con servicio completo de finger food y atención personalizada.",
+    "images": ["/images/gallery-bbq-03.jpg", "/images/gallery-bbq-04.jpg"],
+    "isActive": true
+  },
+  {
+    "id": "evento-03",
+    "title": "Producción Audiovisual, Servicio en Set",
+    "eventType": "Producción",
+    "location": "Barracas, CABA",
+    "guestsRange": "25-30 personas",
+    "highlightMenu": "Boxes individuales, snacks, bebidas",
+    "description": "Servicio de catering para producción de moda con boxes personalizados.",
+    "images": ["/images/gallery-bbq-05.jpg", "/images/gallery-bbq-06.jpg"],
+    "isActive": true
+  },
+  {
+    "id": "evento-04",
+    "title": "Boda Íntima, Catering Premium",
+    "eventType": "Boda",
+    "location": "San Isidro, GBA",
+    "guestsRange": "60-70 personas",
+    "highlightMenu": "Menú degustación, parrilla premium, postres artesanales",
+    "description": "Boda íntima con servicio completo de catering premium y atención personalizada.",
+    "images": ["/images/gallery-bbq-01.jpg", "/images/gallery-bbq-02.jpg"],
+    "isActive": true
+  },
+  {
+    "id": "evento-05",
+    "title": "Feria Gastronómica, Foodtruck",
+    "eventType": "Feria",
+    "location": "La Plata, GBA",
+    "guestsRange": "200+ personas",
+    "highlightMenu": "Burgers, sandwiches, ahumados, salsas",
+    "description": "Participación en feria gastronómica con foodtruck y servicio rápido.",
+    "images": ["/images/gallery-bbq-03.jpg", "/images/gallery-bbq-04.jpg"],
+    "isActive": true
+  },
+  {
+    "id": "evento-06",
+    "title": "Fin de Año, Corporate BBQ",
+    "eventType": "Corporativo",
+    "location": "Belgrano, CABA",
+    "guestsRange": "120-150 personas",
+    "highlightMenu": "Parrilla completa, ahumados, tablas, postres",
+    "description": "Evento de fin de año corporativo con parrilla en vivo y servicio completo.",
+    "images": ["/images/gallery-bbq-05.jpg", "/images/gallery-bbq-06.jpg"],
+    "isActive": true
+  },
+  {
+    "id": "evento-07",
+    "title": "Picada Premium para 20",
+    "eventType": "Social",
+    "location": "Colegiales, CABA",
+    "guestsRange": "18-22 personas",
+    "highlightMenu": "Tabla premium, quesos artesanales, fiambres, salsas",
+    "description": "Reunión social con servicio de picada premium y boxes personalizados.",
+    "images": ["/images/gallery-bbq-01.jpg", "/images/gallery-bbq-02.jpg"],
+    "isActive": true
+  },
+  {
+    "id": "evento-08",
+    "title": "Box Regalo Edición Especial",
+    "eventType": "Social",
+    "location": "Envío a domicilio",
+    "guestsRange": "Individual",
+    "highlightMenu": "Box Los Mejores Amigos con productos premium",
+    "description": "Boxes de regalo personalizados para ocasiones especiales.",
+    "images": ["/images/gallery-bbq-03.jpg", "/images/gallery-bbq-04.jpg"],
+    "isActive": true
+  },
+  {
+    "id": "evento-09",
+    "title": "Cumple Infantil, Finger Food Kids",
+    "eventType": "Cumple",
+    "location": "Villa Urquiza, CABA",
+    "guestsRange": "30-35 personas",
+    "highlightMenu": "Finger food kids, mini burgers, postres",
+    "description": "Cumpleaños infantil con menú especial para chicos y adultos.",
+    "images": ["/images/gallery-bbq-05.jpg", "/images/gallery-bbq-06.jpg"],
+    "isActive": true
+  },
+  {
+    "id": "evento-10",
+    "title": "Lanzamiento de Producto, Cocktail",
+    "eventType": "Corporativo",
+    "location": "Recoleta, CABA",
+    "guestsRange": "50-60 personas",
+    "highlightMenu": "Canapés premium, finger food, bebidas",
+    "description": "Evento de lanzamiento con servicio de cocktail y atención personalizada.",
+    "images": ["/images/gallery-bbq-01.jpg", "/images/gallery-bbq-02.jpg"],
+    "isActive": true
+  },
+  {
+    "id": "evento-11",
+    "title": "Boda al Aire Libre, Parrilla Premium",
+    "eventType": "Boda",
+    "location": "Tigre, GBA",
+    "guestsRange": "100-120 personas",
+    "highlightMenu": "Parrilla premium, ahumados, tablas, postres artesanales",
+    "description": "Boda al aire libre con servicio completo de parrilla y ahumados.",
+    "images": ["/images/gallery-bbq-03.jpg", "/images/gallery-bbq-04.jpg"],
+    "isActive": true
+  },
+  {
+    "id": "evento-12",
+    "title": "Feria de Emprendedores, Foodtruck",
+    "eventType": "Feria",
+    "location": "San Telmo, CABA",
+    "guestsRange": "150+ personas",
+    "highlightMenu": "Burgers, sandwiches, ahumados, combos",
+    "description": "Participación en feria con foodtruck y servicio rápido.",
+    "images": ["/images/gallery-bbq-05.jpg", "/images/gallery-bbq-06.jpg"],
+    "isActive": true
+  }
+]
