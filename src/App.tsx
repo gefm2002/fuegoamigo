@@ -1,9 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { CartProvider } from './cart/useCart';
-import { CartDrawerProvider } from './context/CartDrawerContext';
+import { CartDrawerProvider, useCartDrawer } from './context/CartDrawerContext';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { WhatsAppFloatingButton } from './components/WhatsAppFloatingButton';
+import { CartDrawer } from './components/CartDrawer';
 import { LandingProtection, checkAccess } from './pages/LandingProtection';
 import { Home } from './pages/Home';
 import { Tienda } from './pages/Tienda';
@@ -18,37 +19,48 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function MainContent() {
+  const { isOpen, closeDrawer } = useCartDrawer();
+  
+  return (
+    <>
+      <div className="min-h-screen flex flex-col bg-primary">
+        <Header />
+        <main className="flex-1">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/tienda" element={<Tienda />} />
+            <Route path="/producto/:slug" element={<Producto />} />
+            <Route path="/eventos" element={<Eventos />} />
+            <Route path="/admin" element={<Admin />} />
+          </Routes>
+        </main>
+        <Footer />
+        <WhatsAppFloatingButton />
+      </div>
+      <CartDrawer isOpen={isOpen} onClose={closeDrawer} />
+    </>
+  );
+}
+
 function App() {
   return (
     <CartProvider>
       <CartDrawerProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/landing" element={<LandingProtection />} />
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <div className="min-h-screen flex flex-col bg-primary">
-                  <Header />
-                  <main className="flex-1">
-                    <Routes>
-                      <Route path="/" element={<Home />} />
-                      <Route path="/tienda" element={<Tienda />} />
-                      <Route path="/producto/:slug" element={<Producto />} />
-                      <Route path="/eventos" element={<Eventos />} />
-                      <Route path="/admin" element={<Admin />} />
-                    </Routes>
-                  </main>
-                  <Footer />
-                  <WhatsAppFloatingButton />
-                </div>
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<Navigate to={checkAccess() ? '/' : '/landing'} replace />} />
-        </Routes>
-      </BrowserRouter>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/landing" element={<LandingProtection />} />
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <MainContent />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<Navigate to={checkAccess() ? '/' : '/landing'} replace />} />
+          </Routes>
+        </BrowserRouter>
       </CartDrawerProvider>
     </CartProvider>
   );

@@ -2,6 +2,7 @@ import type { CartItem } from '../cart/useCart';
 
 type CustomerInfo = {
   name: string;
+  deliveryType: 'entrega' | 'retiro';
   zone?: string;
   paymentMethod:
     | 'efectivo'
@@ -31,13 +32,17 @@ export const buildCartMessage = (items: CartItem[], total: number, info: Custome
 
   // Saludo con nombre del cliente
   const lines = [
-    `Hola ${info.name}! 👋`,
+    `Hola soy ${info.name}`,
     '',
   ];
 
-  // Zona/barrio si se completó
-  if (info.zone) {
-    lines.push(`Zona/Barrio: ${info.zone}`);
+  // Tipo de entrega
+  lines.push(`*Tipo de entrega:* ${info.deliveryType === 'entrega' ? 'Entrega' : 'Retiro'}`);
+  lines.push('');
+
+  // Zona/barrio solo si es entrega
+  if (info.deliveryType === 'entrega' && info.zone) {
+    lines.push(`*Zona/Barrio:* ${info.zone}`);
     lines.push('');
   }
 

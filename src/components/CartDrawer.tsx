@@ -10,6 +10,7 @@ interface CartDrawerProps {
 
 const initialCustomer = {
   name: '',
+  deliveryType: 'entrega' as 'entrega' | 'retiro',
   zone: '',
   paymentMethod: 'efectivo' as
     | 'efectivo'
@@ -25,12 +26,13 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const { items, updateQty, removeItem, updateNotes, total, clear } = useCart();
   const [customer, setCustomer] = useState(initialCustomer);
 
-  const isValid = customer.name.trim().length > 0;
+  const isValid = customer.name.trim().length > 0 && (customer.deliveryType === 'retiro' || customer.zone.trim().length > 0);
 
   const whatsappLink = useMemo(() => {
     const message = buildCartMessage(items, total, {
       name: customer.name,
-      zone: customer.zone,
+      deliveryType: customer.deliveryType,
+      zone: customer.deliveryType === 'entrega' ? customer.zone : undefined,
       paymentMethod: customer.paymentMethod,
       notes: customer.notes,
     });
@@ -42,12 +44,12 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100]"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998]"
         onClick={onClose}
       />
-      <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 pointer-events-none">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none overflow-y-auto">
         <div 
-          className="bg-neutral-900 border border-neutral-700 rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden pointer-events-auto shadow-2xl"
+          className="bg-neutral-900 border border-neutral-700 rounded-lg w-full max-w-2xl max-h-[calc(100vh-2rem)] my-auto flex flex-col overflow-hidden pointer-events-auto shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="p-6 border-b border-neutral-700 flex items-center justify-between bg-neutral-900 flex-shrink-0">
@@ -148,13 +150,32 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                     />
                   </div>
                   <div>
-                    <input
-                      className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-sm text-secondary placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-accent"
-                      placeholder="Zona/barrio (opcional)"
-                      value={customer.zone}
-                      onChange={(e) => setCustomer((prev) => ({ ...prev, zone: e.target.value }))}
-                    />
+                    <select
+                      className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-sm text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
+                      value={customer.deliveryType}
+                      onChange={(e) =>
+                        setCustomer((prev) => ({
+                          ...prev,
+                          deliveryType: e.target.value as 'entrega' | 'retiro',
+                          zone: e.target.value === 'retiro' ? '' : prev.zone,
+                        }))
+                      }
+                    >
+                      <option value="entrega">Entrega</option>
+                      <option value="retiro">Retiro</option>
+                    </select>
                   </div>
+                  {customer.deliveryType === 'entrega' && (
+                    <div>
+                      <input
+                        required
+                        className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-sm text-secondary placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-accent"
+                        placeholder="Zona/barrio *"
+                        value={customer.zone}
+                        onChange={(e) => setCustomer((prev) => ({ ...prev, zone: e.target.value }))}
+                      />
+                    </div>
+                  )}
                   <div>
                     <select
                       className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-sm text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
@@ -181,6 +202,11 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                       value={customer.notes}
                       onChange={(e) => setCustomer((prev) => ({ ...prev, notes: e.target.value }))}
                     />
+                  </div>
+                  <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-3 mt-2">
+                    <p className="text-xs text-neutral-400">
+                      <span className="font-medium text-neutral-300">Importante:</span> Los pedidos serán mediante transferencia de seña a coordinar en el próximo paso.
+                    </p>
                   </div>
                 </div>
 

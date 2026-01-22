@@ -2,11 +2,10 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '../cart/useCart';
 import { useCartDrawer } from '../context/CartDrawerContext';
-import { CartDrawer } from './CartDrawer';
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { isOpen: isCartOpen, openDrawer, closeDrawer } = useCartDrawer();
+  const { openDrawer } = useCartDrawer();
   const { itemCount } = useCart();
   const location = useLocation();
 
@@ -167,7 +166,6 @@ export function Header() {
           </div>
         )}
       </div>
-      <CartDrawer isOpen={isCartOpen} onClose={closeDrawer} />
     </header>
   );
 }
