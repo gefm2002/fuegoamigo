@@ -24,17 +24,15 @@ export function Tienda() {
   console.log('Tienda - Active products:', products.filter((p) => p.isActive).length);
 
   // Separar productos destacados, ofertas y resto
-  const { featuredProducts, offerProducts, regularProducts } = useMemo(() => {
+  const { featuredProducts, offerProducts } = useMemo(() => {
     const active = products.filter((p) => p.isActive);
     
     const featured = active.filter((p) => p.featured);
     const offers = active.filter((p) => p.isOffer);
-    const regular = active.filter((p) => !p.featured && !p.isOffer);
 
     return {
       featuredProducts: featured,
       offerProducts: offers,
-      regularProducts: regular,
     };
   }, [products]);
 
@@ -169,14 +167,14 @@ export function Tienda() {
                 return (
                   <div key={product.id} className="relative">
                     <ProductCard product={product} />
-                    {product.discountPercentage > 0 && (
+                    {(product.discountPercentage ?? 0) > 0 && (
                       <div className="absolute top-2 right-2 bg-accent text-secondary px-2 py-1 rounded text-xs font-bold">
                         -{product.discountPercentage}%
                       </div>
                     )}
-                    {product.discountFixed > 0 && (
+                    {(product.discountFixed ?? 0) > 0 && (
                       <div className="absolute top-2 right-2 bg-accent text-secondary px-2 py-1 rounded text-xs font-bold">
-                        -${product.discountFixed.toLocaleString('es-AR')}
+                        -${(product.discountFixed ?? 0).toLocaleString('es-AR')}
                       </div>
                     )}
                     {product.price !== finalPrice && (

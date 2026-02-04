@@ -52,7 +52,7 @@ export async function createOrderDev(orderData: {
   
   // Test connection first - try a simple query to verify the client works
   console.log('Testing Supabase connection...');
-  const { data: testData, error: testError } = await supabasePublic
+  const { error: testError } = await supabasePublic
     .from('fuegoamigo_site_config')
     .select('id')
     .limit(1)

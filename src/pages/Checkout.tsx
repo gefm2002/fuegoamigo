@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../cart/useCart';
-import { buildCartMessage, buildWhatsAppLink } from '../utils/cartWhatsApp';
+import { buildWhatsAppLink } from '../utils/cartWhatsApp';
 import { WHATSAPP_NUMBER } from '../utils/whatsapp';
 import { apiFetch } from '../lib/api';
 import { createOrderDev } from '../lib/ordersDev';

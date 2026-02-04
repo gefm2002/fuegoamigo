@@ -9,13 +9,13 @@ export async function apiFetch<T>(
   endpoint: string,
   options?: RequestInit & { token?: string; query?: Record<string, string> }
 ): Promise<T> {
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options?.headers,
+    ...(options?.headers as Record<string, string>),
   };
 
   if (options?.token) {
-    headers.Authorization = `Bearer ${options.token}`;
+    headers['Authorization'] = `Bearer ${options.token}`;
   }
 
   let url = apiUrl(endpoint);

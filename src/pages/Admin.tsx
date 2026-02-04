@@ -362,7 +362,7 @@ export function Admin() {
           query: { id: orderId },
         });
         setSelectedOrder(order);
-        setOrderNotes(order.notes || []);
+        setOrderNotes(Array.isArray(order.notes) ? order.notes : []);
       } catch (netlifyError) {
         // Si falla y estamos en desarrollo, usar Supabase directo
         if (import.meta.env.DEV) {

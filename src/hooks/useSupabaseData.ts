@@ -96,7 +96,7 @@ export function useProducts(): { products: Product[]; loading: boolean } {
 
 export function useEvents(): Event[] {
   const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchEvents() {
@@ -139,7 +139,7 @@ export function useEvents(): Event[] {
 
 export function usePromos(): Promo[] {
   const [promos, setPromos] = useState<Promo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchPromos() {
@@ -172,7 +172,7 @@ export function usePromos(): Promo[] {
 
 export function useFAQs(): FAQ[] {
   const [faqs, setFaqs] = useState<FAQ[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchFAQs() {
