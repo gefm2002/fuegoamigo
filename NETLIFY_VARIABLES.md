@@ -2,6 +2,20 @@
 
 ## 🚀 Configuración Rápida
 
+### Opción 1: Formato .env (Recomendado - Copiar todo de una vez)
+
+Abre el archivo **`netlify.env.example`** y copia todo su contenido. Luego:
+
+1. Ve a **Netlify Dashboard** → Tu sitio → **Site settings** → **Environment variables**
+2. Haz clic en **"Import from file"** o **"Add multiple"**
+3. Pega todo el contenido del archivo `.env`
+4. Completa los valores que faltan:
+   - `NETLIFY_JWT_SECRET` (generar con comando abajo)
+   - `ADMIN_PASSWORD` (tu password)
+5. Guarda y haz un nuevo deploy
+
+### Opción 2: Agregar una por una
+
 Ve a **Netlify Dashboard** → Tu sitio → **Site settings** → **Environment variables** y agrega estas variables una por una:
 
 ### Variables para Frontend (Build Time) - ⚠️ OBLIGATORIAS
