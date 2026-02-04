@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCart } from '../cart/useCart';
 import { useCartDrawer } from '../context/CartDrawerContext';
-import { useProducts } from '../hooks/useData';
+import { useProducts } from '../hooks/useSupabaseData';
 
 export function Producto() {
-  const products = useProducts();
+  const { products, loading } = useProducts();
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { addItem } = useCart();
@@ -14,6 +14,14 @@ export function Producto() {
   const [notes, setNotes] = useState('');
 
   const product = products.find((p) => p.slug === slug);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-primary flex items-center justify-center">
+        <p className="text-neutral-400">Cargando producto...</p>
+      </div>
+    );
+  }
 
   if (!product) {
     return (

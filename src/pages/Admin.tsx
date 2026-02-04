@@ -1,80 +1,453 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Product, Event, Promo, FAQ } from '../types';
-import productsData from '../data/products.json';
-import eventsData from '../data/events.json';
-import promosData from '../data/promos.json';
-import faqsData from '../data/faqs.json';
-import {
-  saveProducts,
-  loadProducts,
-  saveEvents,
-  loadEvents,
-  savePromos,
-  loadPromos,
-  saveFAQs,
-  loadFAQs,
-  exportData,
-  importData,
-  imageToBase64,
-} from '../utils/storage';
+import type { Product, Event, Promo, FAQ, Category, SiteConfig, Order, OrderNote } from '../types';
+import { apiUrl, apiFetch } from '../lib/api';
+import { slugify } from '../utils/slugify';
+import { supabasePublic } from '../lib/supabasePublic';
+import { getImageUrl } from '../lib/imageUrl';
+import { WHATSAPP_NUMBER } from '../utils/whatsapp';
+import { buildWhatsAppLink } from '../utils/cartWhatsApp';
+import { getDashboardStatsDev } from '../lib/dashboardDev';
 
-const ADMIN_PASSWORD = 'fuegoamigo2024';
-
-type Tab = 'products' | 'events' | 'promos' | 'faqs';
+type AdminSection = 'dashboard' | 'products' | 'categories' | 'events' | 'promos' | 'faqs' | 'orders' | 'config';
 
 export function Admin() {
   const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<Tab>('products');
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [activeSection, setActiveSection] = useState<AdminSection>('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Data states
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [promos, setPromos] = useState<Promo[]>([]);
   const [faqs, setFaqs] = useState<FAQ[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [orderNotes, setOrderNotes] = useState<OrderNote[]>([]);
+  const [config, setConfig] = useState<SiteConfig | null>(null);
+  const [dashboardStats, setDashboardStats] = useState<any>(null);
 
   // Edit states
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [editingPromo, setEditingPromo] = useState<Promo | null>(null);
   const [editingFAQ, setEditingFAQ] = useState<FAQ | null>(null);
+  const [newNote, setNewNote] = useState('');
 
   useEffect(() => {
-    const stored = localStorage.getItem('fuegoamigo_admin_auth');
-    if (stored === 'true') {
-      setIsAuthenticated(true);
-      loadAllData();
+    const storedToken = localStorage.getItem('fuegoamigo_admin_token');
+    if (storedToken) {
+      verifyToken(storedToken);
     }
   }, []);
 
-  const loadAllData = () => {
-    const loadedProducts = loadProducts() || (productsData as Product[]);
-    const loadedEvents = loadEvents() || (eventsData as Event[]);
-    const loadedPromos = loadPromos() || (promosData as Promo[]);
-    const loadedFAQs = loadFAQs() || (faqsData as FAQ[]);
+  useEffect(() => {
+    if (isAuthenticated && activeSection === 'dashboard') {
+      loadDashboardStats();
+    }
+    if (isAuthenticated && activeSection === 'orders') {
+      loadOrders();
+    }
+    if (isAuthenticated && activeSection === 'config') {
+      loadConfig();
+    }
+  }, [isAuthenticated, activeSection]);
 
-    setProducts(loadedProducts);
-    setEvents(loadedEvents);
-    setPromos(loadedPromos);
-    setFaqs(loadedFAQs);
+  const verifyToken = async (tokenToVerify: string) => {
+    try {
+      try {
+        const decoded = JSON.parse(atob(tokenToVerify));
+        if (decoded.dev) {
+          setToken(tokenToVerify);
+          setIsAuthenticated(true);
+          loadAllData();
+          return;
+        }
+      } catch {}
+
+      const data = await apiFetch<{ user: any }>('admin-me', {
+        method: 'GET',
+        token: tokenToVerify,
+      });
+      if (data.user) {
+        setToken(tokenToVerify);
+        setIsAuthenticated(true);
+        loadAllData();
+      }
+    } catch (error) {
+      localStorage.removeItem('fuegoamigo_admin_token');
+      setToken(null);
+      setIsAuthenticated(false);
+    }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const loadAllData = async () => {
+    try {
+      const isDev = import.meta.env.DEV;
+      
+      if (isDev) {
+        // Products
+        const { data: productsData } = await supabasePublic
+          .from('fuegoamigo_products')
+          .select('*, fuegoamigo_categories:category_id(id, slug, name)')
+          .order('created_at', { ascending: false });
+        
+        const mappedProducts = await Promise.all((productsData || []).map(async (p: any) => {
+          const imagePath = p.images?.[0] || '/images/product-box-01.jpg';
+          const imageUrl = await getImageUrl(imagePath);
+          return {
+            id: p.id,
+            slug: p.slug,
+            name: p.name,
+            description: p.description || '',
+            price: parseFloat(p.price),
+            category: p.fuegoamigo_categories?.slug || '',
+            image: imageUrl,
+            tags: p.tags || [],
+            stock: p.stock || 0,
+            isActive: p.is_active !== false,
+            featured: p.featured || false,
+            discountFixed: parseFloat(p.discount_fixed || '0'),
+            discountPercentage: parseFloat(p.discount_percentage || '0'),
+            isOffer: p.is_offer || false,
+            isMadeToOrder: p.is_made_to_order || false,
+          };
+        }));
+        setProducts(mappedProducts);
+
+        // Categories
+        const { data: categoriesData } = await supabasePublic
+          .from('fuegoamigo_categories')
+          .select('*')
+          .order('order', { ascending: true });
+        setCategories((categoriesData || []).map((c: any) => ({
+          id: c.id,
+          slug: c.slug,
+          name: c.name,
+          description: c.description,
+          image: c.image,
+          isActive: c.is_active !== false,
+          order: c.order || 0,
+        })));
+
+        // Events
+        const { data: eventsData } = await supabasePublic
+          .from('fuegoamigo_events')
+          .select('*')
+          .order('created_at', { ascending: false });
+        const mappedEvents = await Promise.all((eventsData || []).map(async (e: any) => {
+          const imageUrls = await Promise.all(
+            (e.images || []).map(async (img: string) => {
+              try {
+                return await getImageUrl(img);
+              } catch {
+                return img;
+              }
+            })
+          );
+          return {
+            id: e.id,
+            title: e.title,
+            eventType: e.event_type,
+            location: e.location || '',
+            guestsRange: e.guests_range || '',
+            highlightMenu: e.highlight_menu || '',
+            description: e.description || '',
+            images: imageUrls.length > 0 ? imageUrls : [],
+            isActive: e.is_active !== false,
+          };
+        }));
+        setEvents(mappedEvents);
+
+        // Promos
+        const { data: promosData } = await supabasePublic
+          .from('fuegoamigo_promos')
+          .select('*')
+          .order('created_at', { ascending: false });
+        setPromos((promosData || []).map((p: any) => ({
+          id: p.id,
+          banco: p.banco,
+          dia: p.dia,
+          topeReintegro: parseFloat(p.tope_reintegro || '0'),
+          porcentaje: p.porcentaje || 0,
+          medios: p.medios || [],
+          vigencia: p.vigencia || '',
+        })));
+
+        // FAQs
+        const { data: faqsData } = await supabasePublic
+          .from('fuegoamigo_faqs')
+          .select('*')
+          .order('order', { ascending: true });
+        setFaqs((faqsData || []).map((f: any) => ({
+          id: f.id,
+          question: f.question,
+          answer: f.answer,
+        })));
+      } else {
+        // Production: use Netlify Functions
+        const [productsRes, categoriesRes, eventsRes, promosRes, faqsRes] = await Promise.all([
+          fetch(apiUrl('public-catalog')),
+          fetch(apiUrl('public-categories')),
+          fetch(apiUrl('public-events')),
+          fetch(apiUrl('public-promos')),
+          fetch(apiUrl('public-faqs')),
+        ]);
+
+        const productsData = await productsRes.json();
+        const mappedProducts = await Promise.all(productsData.map(async (p: any) => {
+          const imagePath = p.images?.[0] || '/images/product-box-01.jpg';
+          const imageUrl = await getImageUrl(imagePath);
+          return {
+            id: p.id,
+            slug: p.slug,
+            name: p.name,
+            description: p.description || '',
+            price: parseFloat(p.price),
+            category: p.fuegoamigo_categories?.slug || '',
+            image: imageUrl,
+            tags: p.tags || [],
+            stock: p.stock || 0,
+            isActive: p.is_active !== false,
+            featured: p.featured || false,
+            discountFixed: parseFloat(p.discount_fixed || '0'),
+            discountPercentage: parseFloat(p.discount_percentage || '0'),
+            isOffer: p.is_offer || false,
+            isMadeToOrder: p.is_made_to_order || false,
+          };
+        }));
+        setProducts(mappedProducts);
+
+        const categoriesData = await categoriesRes.json();
+        setCategories(categoriesData.map((c: any) => ({
+          id: c.id,
+          slug: c.slug,
+          name: c.name,
+          description: c.description,
+          image: c.image,
+          isActive: c.is_active !== false,
+          order: c.order || 0,
+        })));
+
+        const eventsData = await eventsRes.json();
+        const mappedEvents = await Promise.all(eventsData.map(async (e: any) => {
+          const imageUrls = await Promise.all(
+            (e.images || []).map(async (img: string) => {
+              try {
+                return await getImageUrl(img);
+              } catch {
+                return img;
+              }
+            })
+          );
+          return {
+            id: e.id,
+            title: e.title,
+            eventType: e.event_type,
+            location: e.location || '',
+            guestsRange: e.guests_range || '',
+            highlightMenu: e.highlight_menu || '',
+            description: e.description || '',
+            images: imageUrls.length > 0 ? imageUrls : [],
+            isActive: e.is_active !== false,
+          };
+        }));
+        setEvents(mappedEvents);
+
+        const promosData = await promosRes.json();
+        setPromos(promosData.map((p: any) => ({
+          id: p.id,
+          banco: p.banco,
+          dia: p.dia,
+          topeReintegro: parseFloat(p.tope_reintegro || '0'),
+          porcentaje: p.porcentaje || 0,
+          medios: p.medios || [],
+          vigencia: p.vigencia || '',
+        })));
+
+        const faqsData = await faqsRes.json();
+        setFaqs(faqsData.map((f: any) => ({
+          id: f.id,
+          question: f.question,
+          answer: f.answer,
+        })));
+      }
+    } catch (error: any) {
+      console.error('Error loading data:', error);
+    }
+  };
+
+  const loadDashboardStats = async () => {
+    try {
+      // Intentar con Netlify Function primero
+      try {
+        const stats = await apiFetch<any>('admin-dashboard', {
+          method: 'GET',
+          token: token!,
+        });
+        setDashboardStats(stats);
+      } catch (netlifyError) {
+        // Si falla y estamos en desarrollo, intentar con Supabase directo
+        if (import.meta.env.DEV) {
+          console.warn('Netlify Functions no disponibles, usando Supabase directo para dashboard');
+          const stats = await getDashboardStatsDev();
+          setDashboardStats(stats);
+        } else {
+          throw netlifyError;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading dashboard stats:', error);
+      // Establecer valores por defecto si falla
+      setDashboardStats({
+        products: { active: 0 },
+        events: { active: 0 },
+        orders: {
+          total: 0,
+          thisMonth: 0,
+          byStatus: {
+            pending: 0,
+            confirmed: 0,
+            preparing: 0,
+            ready: 0,
+            delivered: 0,
+            cancelled: 0,
+          },
+        },
+      });
+    }
+  };
+
+  const loadOrders = async () => {
+    try {
+      // Intentar con Netlify Function primero
+      try {
+        const ordersData = await apiFetch<Order[]>('admin-orders-list', {
+          method: 'GET',
+          token: token!,
+        });
+        setOrders(ordersData || []);
+      } catch (netlifyError) {
+        // Si falla y estamos en desarrollo, intentar con Supabase directo usando service_role
+        if (import.meta.env.DEV) {
+          console.warn('Netlify Functions no disponibles, usando Supabase directo para órdenes');
+          const { getOrdersDev } = await import('../lib/ordersDev');
+          const ordersData = await getOrdersDev();
+          setOrders(ordersData || []);
+        } else {
+          throw netlifyError;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading orders:', error);
+      setOrders([]);
+    }
+  };
+
+  const loadOrderDetail = async (orderId: string) => {
+    try {
+      // Intentar con Netlify Function primero
+      try {
+        const order = await apiFetch<Order>('admin-orders-get', {
+          method: 'GET',
+          token: token!,
+          query: { id: orderId },
+        });
+        setSelectedOrder(order);
+        setOrderNotes(order.notes || []);
+      } catch (netlifyError) {
+        // Si falla y estamos en desarrollo, usar Supabase directo
+        if (import.meta.env.DEV) {
+          console.warn('Netlify Functions no disponibles, usando Supabase directo para detalle de orden');
+          const { getOrderDetailDev } = await import('../lib/ordersDev');
+          const order = await getOrderDetailDev(orderId);
+          setSelectedOrder(order);
+          setOrderNotes(order.notes || []);
+        } else {
+          throw netlifyError;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading order detail:', error);
+    }
+  };
+
+  const loadConfig = async () => {
+    try {
+      const configData = await apiFetch<any>('admin-config-get', {
+        method: 'GET',
+        token: token!,
+      });
+      // Mapear de snake_case a camelCase
+      setConfig({
+        id: configData.id || '',
+        brandName: configData.brand_name || 'Fuego Amigo',
+        whatsapp: configData.whatsapp || '',
+        email: configData.email || '',
+        address: configData.address || '',
+        zone: configData.zone || '',
+        hours: configData.hours || {},
+        paymentMethods: configData.payment_methods || [],
+        deliveryOptions: configData.delivery_options || [],
+        waTemplates: configData.wa_templates || {},
+      });
+    } catch (error) {
+      console.error('Error loading config:', error);
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === ADMIN_PASSWORD) {
-      setIsAuthenticated(true);
-      localStorage.setItem('fuegoamigo_admin_auth', 'true');
-      loadAllData();
-    } else {
-      alert('Contraseña incorrecta');
+    setLoading(true);
+    setError('');
+
+    try {
+      const loginEmail = email || 'admin@fuegoamigo.com';
+      let data: { token: string; user: any };
+      
+      try {
+        data = await apiFetch<{ token: string; user: any }>('admin-login', {
+          method: 'POST',
+          body: JSON.stringify({ email: loginEmail, password }),
+        });
+      } catch (netlifyError) {
+        if (import.meta.env.DEV) {
+          if (loginEmail === 'admin@fuegoamigo.com' && password === 'fuegoamigo2024') {
+            const devToken = btoa(JSON.stringify({ email: loginEmail, dev: true }));
+            data = { token: devToken, user: { email: loginEmail, role: 'admin' } };
+          } else {
+            throw new Error('Credenciales incorrectas');
+          }
+        } else {
+          throw netlifyError;
+        }
+      }
+
+      if (data.token) {
+        setToken(data.token);
+        setIsAuthenticated(true);
+        localStorage.setItem('fuegoamigo_admin_token', data.token);
+        await loadAllData();
+      }
+    } catch (error: any) {
+      setError(error.message || 'Credenciales incorrectas');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    localStorage.removeItem('fuegoamigo_admin_auth');
+    setToken(null);
+    localStorage.removeItem('fuegoamigo_admin_token');
     navigate('/');
   };
 
@@ -84,23 +457,37 @@ export function Admin() {
         <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-8 max-w-md w-full mx-4">
           <h1 className="font-display text-2xl text-secondary mb-6 text-center">Admin Login</h1>
           <form onSubmit={handleLogin} className="space-y-4">
+            {error && (
+              <div className="bg-accent/20 border border-accent rounded p-3 text-sm text-accent">
+                {error}
+              </div>
+            )}
             <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">
-                Contraseña
-              </label>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@fuegoamigo.com"
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Contraseña</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
-                autoFocus
               />
             </div>
             <button
               type="submit"
-              className="w-full py-3 bg-accent text-secondary font-medium rounded hover:bg-accent/90 transition-colors"
+              disabled={loading}
+              className="w-full py-3 bg-accent text-secondary font-medium rounded hover:bg-accent/90 transition-colors disabled:opacity-50"
             >
-              Ingresar
+              {loading ? 'Ingresando...' : 'Ingresar'}
             </button>
           </form>
         </div>
@@ -108,495 +495,1044 @@ export function Admin() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-primary">
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="font-display text-3xl text-secondary">Panel de Administración</h1>
-          <div className="flex gap-4">
-            <button
-              onClick={exportData}
-              className="px-4 py-2 bg-neutral-900 border border-neutral-700 text-secondary rounded hover:bg-neutral-800 transition-colors"
-            >
-              Exportar JSON
-            </button>
-            <label className="px-4 py-2 bg-neutral-900 border border-neutral-700 text-secondary rounded hover:bg-neutral-800 transition-colors cursor-pointer">
-              Importar JSON
-              <input
-                type="file"
-                accept=".json"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    importData(file)
-                      .then(() => {
-                        loadAllData();
-                        alert('Datos importados correctamente');
-                      })
-                      .catch(() => alert('Error al importar datos'));
-                  }
-                }}
-              />
-            </label>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-            >
-              Salir
-            </button>
-          </div>
-        </div>
+  const menuItems: { id: AdminSection; label: string; icon: string }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'products', label: 'Productos', icon: '🛍️' },
+    { id: 'categories', label: 'Categorías', icon: '📁' },
+    { id: 'events', label: 'Eventos', icon: '🎉' },
+    { id: 'promos', label: 'Promociones', icon: '🎁' },
+    { id: 'faqs', label: 'FAQs', icon: '❓' },
+    { id: 'orders', label: 'Órdenes', icon: '📦' },
+    { id: 'config', label: 'Configuración', icon: '⚙️' },
+  ];
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b border-neutral-700">
-          {(['products', 'events', 'promos', 'faqs'] as Tab[]).map((tab) => (
+  return (
+    <div className="min-h-screen bg-primary flex">
+      {/* Sidebar */}
+      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-neutral-900 border-r border-neutral-700 transform transition-transform duration-200 ease-in-out ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      }`}>
+        <div className="p-4 border-b border-neutral-700 flex items-center justify-between">
+          <h2 className="font-display text-xl text-secondary">Admin</h2>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden text-neutral-400 hover:text-secondary"
+          >
+            ✕
+          </button>
+        </div>
+        <nav className="p-4 space-y-2">
+          {menuItems.map((item) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-6 py-3 font-medium transition-colors ${
-                activeTab === tab
-                  ? 'border-b-2 border-accent text-accent'
-                  : 'text-neutral-400 hover:text-secondary'
+              key={item.id}
+              onClick={() => {
+                setActiveSection(item.id);
+                setSidebarOpen(false);
+              }}
+              className={`w-full text-left px-4 py-2 rounded transition-colors ${
+                activeSection === item.id
+                  ? 'bg-accent text-secondary'
+                  : 'text-neutral-400 hover:bg-neutral-800 hover:text-secondary'
               }`}
             >
-              {tab === 'products' && 'Productos'}
-              {tab === 'events' && 'Eventos'}
-              {tab === 'promos' && 'Promociones'}
-              {tab === 'faqs' && 'FAQs'}
+              <span className="mr-2">{item.icon}</span>
+              {item.label}
             </button>
           ))}
+        </nav>
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-neutral-700">
+          <button
+            onClick={handleLogout}
+            className="w-full px-4 py-2 bg-neutral-800 text-secondary rounded hover:bg-neutral-700 transition-colors"
+          >
+            Salir
+          </button>
         </div>
+      </aside>
 
-        {/* Products Tab */}
-        {activeTab === 'products' && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-display text-2xl text-secondary">Productos</h2>
-              <button
-                onClick={() => setEditingProduct({} as Product)}
-                className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-              >
-                + Nuevo Producto
-              </button>
-            </div>
-            <ProductManager
+      {/* Overlay for mobile */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Main content */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-4 md:p-8">
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden mb-4 p-2 text-neutral-400 hover:text-secondary"
+          >
+            ☰
+          </button>
+
+          {/* Render active section */}
+          {activeSection === 'dashboard' && <DashboardSection stats={dashboardStats} />}
+          {activeSection === 'products' && (
+            <ProductsSection
               products={products}
-              onUpdate={(updated) => {
-                setProducts(updated);
-                saveProducts(updated);
-              }}
-              editing={editingProduct}
-              onEdit={setEditingProduct}
+              categories={categories}
+              editingProduct={editingProduct}
+              setEditingProduct={setEditingProduct}
+              token={token!}
+              onReload={loadAllData}
             />
-          </div>
-        )}
-
-        {/* Events Tab */}
-        {activeTab === 'events' && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-display text-2xl text-secondary">Eventos</h2>
-              <button
-                onClick={() => setEditingEvent({} as Event)}
-                className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-              >
-                + Nuevo Evento
-              </button>
-            </div>
-            <EventManager
+          )}
+          {activeSection === 'categories' && (
+            <CategoriesSection
+              categories={categories}
+              editingCategory={editingCategory}
+              setEditingCategory={setEditingCategory}
+              token={token!}
+              onReload={loadAllData}
+            />
+          )}
+          {activeSection === 'events' && (
+            <EventsSection
               events={events}
-              onUpdate={(updated) => {
-                setEvents(updated);
-                saveEvents(updated);
-              }}
-              editing={editingEvent}
-              onEdit={setEditingEvent}
+              editingEvent={editingEvent}
+              setEditingEvent={setEditingEvent}
+              token={token!}
+              onReload={loadAllData}
             />
-          </div>
-        )}
-
-        {/* Promos Tab */}
-        {activeTab === 'promos' && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-display text-2xl text-secondary">Promociones</h2>
-              <button
-                onClick={() => setEditingPromo({} as Promo)}
-                className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-              >
-                + Nueva Promoción
-              </button>
-            </div>
-            <PromoManager
+          )}
+          {activeSection === 'promos' && (
+            <PromosSection
               promos={promos}
-              onUpdate={(updated) => {
-                setPromos(updated);
-                savePromos(updated);
-              }}
-              editing={editingPromo}
-              onEdit={setEditingPromo}
+              editingPromo={editingPromo}
+              setEditingPromo={setEditingPromo}
+              token={token!}
+              onReload={loadAllData}
             />
-          </div>
-        )}
-
-        {/* FAQs Tab */}
-        {activeTab === 'faqs' && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-display text-2xl text-secondary">FAQs</h2>
-              <button
-                onClick={() => setEditingFAQ({} as FAQ)}
-                className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-              >
-                + Nueva FAQ
-              </button>
-            </div>
-            <FAQManager
+          )}
+          {activeSection === 'faqs' && (
+            <FAQsSection
               faqs={faqs}
-              onUpdate={(updated) => {
-                setFaqs(updated);
-                saveFAQs(updated);
-              }}
-              editing={editingFAQ}
-              onEdit={setEditingFAQ}
+              editingFAQ={editingFAQ}
+              setEditingFAQ={setEditingFAQ}
+              token={token!}
+              onReload={loadAllData}
             />
-          </div>
-        )}
+          )}
+          {activeSection === 'orders' && (
+            <OrdersSection
+              orders={orders}
+              selectedOrder={selectedOrder}
+              orderNotes={orderNotes}
+              newNote={newNote}
+              setNewNote={setNewNote}
+              onSelectOrder={loadOrderDetail}
+              onUpdateOrder={loadOrders}
+              token={token!}
+            />
+          )}
+          {activeSection === 'config' && (
+            <ConfigSection
+              config={config}
+              token={token!}
+              onReload={loadConfig}
+            />
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// Dashboard Section
+function DashboardSection({ stats }: { stats: any }) {
+  // Valores por defecto si no hay stats
+  const defaultStats = {
+    products: { active: 0 },
+    events: { active: 0 },
+    orders: {
+      total: 0,
+      thisMonth: 0,
+      byStatus: {
+        pending: 0,
+        confirmed: 0,
+        preparing: 0,
+        ready: 0,
+        delivered: 0,
+        cancelled: 0,
+      },
+    },
+  };
+
+  const displayStats = stats || defaultStats;
+
+  return (
+    <div>
+      <h1 className="font-display text-3xl text-secondary mb-8">Dashboard</h1>
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6">
+          <h3 className="text-neutral-400 text-sm mb-2">Productos Activos</h3>
+          <p className="font-display text-3xl text-secondary">{displayStats.products?.active || 0}</p>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6">
+          <h3 className="text-neutral-400 text-sm mb-2">Eventos Activos</h3>
+          <p className="font-display text-3xl text-secondary">{displayStats.events?.active || 0}</p>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6">
+          <h3 className="text-neutral-400 text-sm mb-2">Total Órdenes</h3>
+          <p className="font-display text-3xl text-secondary">{displayStats.orders?.total || 0}</p>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6">
+          <h3 className="text-neutral-400 text-sm mb-2">Órdenes Este Mes</h3>
+          <p className="font-display text-3xl text-secondary">{displayStats.orders?.thisMonth || 0}</p>
+        </div>
+      </div>
+
+      <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6">
+        <h2 className="font-display text-xl text-secondary mb-4">Órdenes por Estado</h2>
+        <div className="grid md:grid-cols-3 gap-4">
+          {Object.entries(displayStats.orders?.byStatus || defaultStats.orders.byStatus).map(([status, count]: [string, any]) => (
+            <div key={status} className="bg-neutral-800 rounded p-4">
+              <p className="text-neutral-400 text-sm capitalize">{status}</p>
+              <p className="font-display text-2xl text-secondary">{count || 0}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-// Product Manager Component
-function ProductManager({
+// Products Section
+function ProductsSection({
   products,
-  onUpdate,
-  editing,
-  onEdit,
+  categories,
+  editingProduct,
+  setEditingProduct,
+  token,
+  onReload,
 }: {
   products: Product[];
-  onUpdate: (products: Product[]) => void;
-  editing: Product | null;
-  onEdit: (product: Product | null) => void;
+  categories: Category[];
+  editingProduct: Product | null;
+  setEditingProduct: (p: Product | null) => void;
+  token: string;
+  onReload: () => void;
 }) {
-  const [formData, setFormData] = useState<Partial<Product>>({});
+  const [formData, setFormData] = useState<any>({
+    name: '',
+    description: '',
+    price: '',
+    category_id: '',
+    stock: '',
+    discountFixed: '',
+    discountPercentage: '',
+    isActive: true,
+    featured: false,
+    isOffer: false,
+    isMadeToOrder: false,
+    tags: [],
+    images: [],
+  });
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
-  useEffect(() => {
-    if (editing) {
-      setFormData(editing.id ? editing : {});
-    }
-  }, [editing]);
+  const validateImageFile = (file: File): { valid: boolean; error?: string } => {
+    const maxSize = 1572864; // 1.5MB
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
-  const handleSave = () => {
-    if (!formData.name || !formData.slug || !formData.price) {
-      alert('Completa los campos obligatorios');
-      return;
+    if (file.size > maxSize) {
+      return { valid: false, error: 'El archivo excede el tamaño máximo de 1.5MB' };
     }
 
-    let updated: Product[];
-    if (editing?.id) {
-      updated = products.map((p) => (p.id === editing.id ? { ...formData, id: editing.id } as Product : p));
-    } else {
-      const newProduct: Product = {
-        id: `product-${Date.now()}`,
-        slug: formData.slug,
-        name: formData.name,
-        description: formData.description || '',
-        price: formData.price,
-        category: formData.category || 'boxes-y-regalos',
-        image: formData.image || '/images/product-box-01.jpg',
-        tags: formData.tags || [],
-        stock: formData.stock || 0,
-        isActive: formData.isActive !== undefined ? formData.isActive : true,
-        featured: formData.featured || false,
-      };
-      updated = [...products, newProduct];
+    if (!allowedTypes.includes(file.type)) {
+      return { valid: false, error: 'Tipo de archivo no permitido. Solo JPEG, PNG y WebP' };
     }
-    onUpdate(updated);
-    onEdit(null);
-    setFormData({});
-  };
 
-  const handleDelete = (id: string) => {
-    if (confirm('¿Eliminar este producto?')) {
-      onUpdate(products.filter((p) => p.id !== id));
-    }
+    return { valid: true };
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const base64 = await imageToBase64(file);
-        setFormData({ ...formData, image: base64 });
-      } catch (error) {
-        alert('Error al cargar imagen');
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+
+    if (formData.images.length >= 5) {
+      alert('Máximo 5 imágenes por producto');
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const entityId = editingProduct?.id || 'temp-' + Date.now();
+      const filename = file.name;
+
+      // Obtener signed URL
+      const signResponse = await apiFetch<{ signedUrl: string; path: string }>('admin-assets-sign-upload', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          entityId,
+          filename,
+          contentType: file.type,
+        }),
+      });
+
+      // Subir imagen a Supabase Storage
+      const uploadResponse = await fetch(signResponse.signedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Error al subir la imagen');
+      }
+
+      // Agregar path a las imágenes
+      const newImages = [...formData.images, signResponse.path];
+      setFormData({ ...formData, images: newImages });
+
+      // Cargar preview
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreviews([...imagePreviews, previewUrl]);
+
+      alert('Imagen subida exitosamente');
+    } catch (error: any) {
+      console.error('Error uploading image:', error);
+      alert(`Error al subir imagen: ${error.message}`);
+    } finally {
+      setUploadingImage(false);
+      // Reset input
+      if (e.target) {
+        e.target.value = '';
       }
     }
   };
 
-  if (editing) {
+  const handleRemoveImage = (index: number) => {
+    const newImages = formData.images.filter((_: any, i: number) => i !== index);
+    const newPreviews = imagePreviews.filter((_, i) => i !== index);
+    setFormData({ ...formData, images: newImages });
+    setImagePreviews(newPreviews);
+  };
+
+  useEffect(() => {
+    const loadProductImages = async () => {
+      if (editingProduct) {
+        // Cargar imágenes desde Supabase para obtener los paths reales
+        try {
+          const isDev = import.meta.env.DEV;
+          let productData: any;
+          
+          if (isDev) {
+            const { data } = await supabasePublic
+              .from('fuegoamigo_products')
+              .select('images')
+              .eq('id', editingProduct.id)
+              .single();
+            productData = data;
+          } else {
+            // En producción, necesitaríamos una función admin para obtener el producto completo
+            // Por ahora, usar las imágenes del producto editado
+            productData = { images: editingProduct.image ? [editingProduct.image] : [] };
+          }
+          
+          const existingImages = productData?.images || [];
+          setFormData({
+            id: editingProduct.id,
+            name: editingProduct.name,
+            description: editingProduct.description,
+            price: editingProduct.price.toString(),
+            category_id: categories.find(c => c.slug === editingProduct.category)?.id || '',
+            stock: editingProduct.stock.toString(),
+            discountFixed: (editingProduct.discountFixed || 0).toString(),
+            discountPercentage: (editingProduct.discountPercentage || 0).toString(),
+            isActive: editingProduct.isActive,
+            featured: editingProduct.featured,
+            isOffer: editingProduct.isOffer || false,
+            isMadeToOrder: editingProduct.isMadeToOrder || false,
+            tags: editingProduct.tags || [],
+            images: existingImages,
+          });
+          
+          // Cargar previews de imágenes existentes
+          const previews = await Promise.all(
+            existingImages.map(async (imgPath: string) => {
+              try {
+                return await getImageUrl(imgPath);
+              } catch {
+                return imgPath;
+              }
+            })
+          );
+          setImagePreviews(previews);
+        } catch (error) {
+          console.error('Error loading product images:', error);
+          // Fallback: usar imagen del producto
+          const existingImages = editingProduct.image ? [editingProduct.image] : [];
+          setFormData({
+            id: editingProduct.id,
+            name: editingProduct.name,
+            description: editingProduct.description,
+            price: editingProduct.price.toString(),
+            category_id: categories.find(c => c.slug === editingProduct.category)?.id || '',
+            stock: editingProduct.stock.toString(),
+            discountFixed: (editingProduct.discountFixed || 0).toString(),
+            discountPercentage: (editingProduct.discountPercentage || 0).toString(),
+            isActive: editingProduct.isActive,
+            featured: editingProduct.featured,
+            isOffer: editingProduct.isOffer || false,
+            isMadeToOrder: editingProduct.isMadeToOrder || false,
+            tags: editingProduct.tags || [],
+            images: existingImages,
+          });
+          setImagePreviews(existingImages);
+        }
+      } else {
+        setFormData({
+          name: '',
+          description: '',
+          price: '',
+          category_id: '',
+          stock: '',
+          discountFixed: '',
+          discountPercentage: '',
+          isActive: true,
+          featured: false,
+          isOffer: false,
+          isMadeToOrder: false,
+          tags: [],
+          images: [],
+        });
+        setImagePreviews([]);
+      }
+    };
+    
+    loadProductImages();
+  }, [editingProduct, categories]);
+
+  const handleSave = async () => {
+    try {
+      await apiFetch('admin-products-upsert', {
+        method: editingProduct ? 'PUT' : 'POST',
+        token,
+        body: JSON.stringify({
+          ...formData,
+          slug: slugify(formData.name),
+          price: parseFloat(formData.price),
+          stock: parseInt(formData.stock || '0'),
+          discount_fixed: parseFloat(formData.discountFixed || '0'),
+          discount_percentage: parseFloat(formData.discountPercentage || '0'),
+          is_offer: formData.isOffer,
+          is_made_to_order: formData.isMadeToOrder,
+          images: formData.images, // Incluir imágenes
+        }),
+      });
+      setEditingProduct(null);
+      onReload();
+      alert('Producto guardado exitosamente');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Eliminar este producto?')) return;
+    try {
+      await apiFetch('admin-products-delete', {
+        method: 'DELETE',
+        token,
+        query: { id },
+      });
+      onReload();
+      alert('Producto eliminado');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  if (editingProduct || formData.name) {
     return (
-      <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 mb-6">
-        <h3 className="font-display text-xl text-secondary mb-4">
-          {editing.id ? 'Editar Producto' : 'Nuevo Producto'}
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <h1 className="font-display text-2xl text-secondary mb-4">
+          {editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
+        </h1>
+        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-neutral-300 mb-2">Nombre *</label>
             <input
               type="text"
-              value={formData.name || ''}
+              value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Slug *</label>
-            <input
-              type="text"
-              value={formData.slug || ''}
-              onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
-          </div>
-          <div className="md:col-span-2">
             <label className="block text-sm font-medium text-neutral-300 mb-2">Descripción</label>
             <textarea
-              value={formData.description || ''}
+              value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
               className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Precio *</label>
-            <input
-              type="number"
-              value={formData.price || ''}
-              onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Precio *</label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Categoría</label>
+              <select
+                value={formData.category_id}
+                onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              >
+                <option value="">Sin categoría</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Categoría</label>
-            <select
-              value={formData.category || 'boxes-y-regalos'}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            >
-              <option value="boxes-y-regalos">Boxes y Regalos</option>
-              <option value="picadas-y-tablas">Picadas y Tablas</option>
-              <option value="ahumados">Ahumados</option>
-              <option value="salsas-y-aderezos">Salsas y Aderezos</option>
-              <option value="sandwiches-y-burgers">Sandwiches y Burgers</option>
-              <option value="finger-food">Finger Food</option>
-              <option value="postres">Postres</option>
-              <option value="combos">Combos</option>
-            </select>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Stock</label>
+              <input
+                type="number"
+                value={formData.stock}
+                onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Descuento Fijo</label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.discountFixed}
+                onChange={(e) => setFormData({ ...formData, discountFixed: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Stock</label>
-            <input
-              type="number"
-              value={formData.stock || 0}
-              onChange={(e) => setFormData({ ...formData, stock: Number(e.target.value) })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Descuento %</label>
+              <input
+                type="number"
+                step="0.01"
+                max="100"
+                value={formData.discountPercentage}
+                onChange={(e) => setFormData({ ...formData, discountPercentage: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
           </div>
+          
+          {/* Upload de imágenes */}
           <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Imagen</label>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">
+              Imágenes ({formData.images.length}/5)
+            </label>
             <input
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               onChange={handleImageUpload}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              disabled={uploadingImage || formData.images.length >= 5}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary mb-2"
             />
-            {formData.image && (
-              <img src={formData.image} alt="Preview" className="mt-2 w-32 h-32 object-cover rounded" />
+            {uploadingImage && <p className="text-neutral-400 text-sm">Subiendo imagen...</p>}
+            {formData.images.length >= 5 && (
+              <p className="text-accent text-sm">Máximo 5 imágenes alcanzado</p>
             )}
-            <input
-              type="text"
-              value={formData.image || ''}
-              onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-              placeholder="O ingresa URL"
-              className="w-full mt-2 px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
+            
+            {/* Preview de imágenes */}
+            {imagePreviews.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+                {imagePreviews.map((preview, index) => (
+                  <div key={index} className="relative">
+                    <img
+                      src={preview}
+                      alt={`Preview ${index + 1}`}
+                      className="w-full h-32 object-cover rounded border border-neutral-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage(index)}
+                      className="absolute top-2 right-2 bg-accent text-secondary rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-accent/90"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Tags (separados por coma)</label>
-            <input
-              type="text"
-              value={formData.tags?.join(', ') || ''}
-              onChange={(e) => setFormData({ ...formData, tags: e.target.value.split(',').map((t) => t.trim()) })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
-          </div>
-          <div className="flex gap-2">
-            <label className="flex items-center">
+
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-neutral-300">
               <input
                 type="checkbox"
-                checked={formData.isActive !== false}
+                checked={formData.isActive}
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="mr-2"
+                className="rounded"
               />
-              <span className="text-neutral-300">Activo</span>
+              Activo
             </label>
-            <label className="flex items-center">
+            <label className="flex items-center gap-2 text-neutral-300">
               <input
                 type="checkbox"
-                checked={formData.featured || false}
+                checked={formData.featured}
                 onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
-                className="mr-2"
+                className="rounded"
               />
-              <span className="text-neutral-300">Destacado</span>
+              Destacado
+            </label>
+            <label className="flex items-center gap-2 text-neutral-300">
+              <input
+                type="checkbox"
+                checked={formData.isOffer}
+                onChange={(e) => setFormData({ ...formData, isOffer: e.target.checked })}
+                className="rounded"
+              />
+              Oferta
+            </label>
+            <label className="flex items-center gap-2 text-neutral-300">
+              <input
+                type="checkbox"
+                checked={formData.isMadeToOrder}
+                onChange={(e) => setFormData({ ...formData, isMadeToOrder: e.target.checked })}
+                className="rounded"
+              />
+              Por pedido
             </label>
           </div>
-        </div>
-        <div className="flex gap-4 mt-6">
-          <button
-            onClick={handleSave}
-            className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-          >
-            Guardar
-          </button>
-          <button
-            onClick={() => {
-              onEdit(null);
-              setFormData({});
-            }}
-            className="px-6 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700 transition-colors"
-          >
-            Cancelar
-          </button>
+          <div className="flex gap-4 mt-6">
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+            >
+              Guardar
+            </button>
+            <button
+              onClick={() => setEditingProduct(null)}
+              className="px-6 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {products.map((product) => (
-        <div key={product.id} className="bg-neutral-900 border border-neutral-700 rounded-lg p-4 flex items-center gap-4">
-          <img src={product.image} alt={product.name} className="w-20 h-20 object-cover rounded" />
-          <div className="flex-1">
-            <h3 className="font-display text-lg text-secondary">{product.name}</h3>
-            <p className="text-neutral-400 text-sm">${product.price.toLocaleString('es-AR')}</p>
-            <p className="text-neutral-500 text-xs">{product.category}</p>
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="font-display text-3xl text-secondary">Productos</h1>
+        <button
+          onClick={() => setEditingProduct({} as Product)}
+          className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+        >
+          + Nuevo Producto
+        </button>
+      </div>
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {products.map((product) => (
+          <div key={product.id} className="bg-neutral-900 border border-neutral-700 rounded-lg p-4">
+            {product.image && (
+              <img src={product.image} alt={product.name} className="w-full h-32 object-cover rounded mb-2" />
+            )}
+            <h3 className="font-display text-lg text-secondary mb-2">{product.name}</h3>
+            <p className="text-neutral-400 text-sm mb-2">${product.price.toLocaleString('es-AR')}</p>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setEditingProduct(product)}
+                className="flex-1 px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+              >
+                Editar
+              </button>
+              <button
+                onClick={() => handleDelete(product.id)}
+                className="flex-1 px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+              >
+                Eliminar
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onEdit(product)}
-              className="px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700 transition-colors"
-            >
-              Editar
-            </button>
-            <button
-              onClick={() => handleDelete(product.id)}
-              className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-            >
-              Eliminar
-            </button>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
 
-// Event Manager Component
-function EventManager({
-  events,
-  onUpdate,
-  editing,
-  onEdit,
+// Categories Section
+function CategoriesSection({
+  categories,
+  editingCategory,
+  setEditingCategory,
+  token,
+  onReload,
 }: {
-  events: Event[];
-  onUpdate: (events: Event[]) => void;
-  editing: Event | null;
-  onEdit: (event: Event | null) => void;
+  categories: Category[];
+  editingCategory: Category | null;
+  setEditingCategory: (c: Category | null) => void;
+  token: string;
+  onReload: () => void;
 }) {
-  const [formData, setFormData] = useState<Partial<Event>>({});
+  const [formData, setFormData] = useState<any>({
+    name: '',
+    description: '',
+    order: 0,
+    isActive: true,
+  });
 
   useEffect(() => {
-    if (editing) {
-      setFormData(editing.id ? editing : {});
+    if (editingCategory) {
+      setFormData({
+        id: editingCategory.id,
+        name: editingCategory.name,
+        description: editingCategory.description || '',
+        order: editingCategory.order || 0,
+        isActive: editingCategory.isActive,
+      });
+    } else {
+      setFormData({ name: '', description: '', order: 0, isActive: true });
     }
-  }, [editing]);
+  }, [editingCategory]);
 
-  const handleSave = () => {
-    if (!formData.title || !formData.eventType) {
-      alert('Completa los campos obligatorios');
+  const handleSave = async () => {
+    try {
+      await apiFetch('admin-categories-upsert', {
+        method: editingCategory ? 'PUT' : 'POST',
+        token,
+        body: JSON.stringify({
+          ...formData,
+          slug: slugify(formData.name),
+        }),
+      });
+      setEditingCategory(null);
+      onReload();
+      alert('Categoría guardada');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Eliminar esta categoría?')) return;
+    try {
+      await apiFetch('admin-categories-delete', {
+        method: 'DELETE',
+        token,
+        query: { id },
+      });
+      onReload();
+      alert('Categoría eliminada');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  if (editingCategory || formData.name) {
+    return (
+      <div>
+        <h1 className="font-display text-2xl text-secondary mb-4">
+          {editingCategory ? 'Editar Categoría' : 'Nueva Categoría'}
+        </h1>
+        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Nombre *</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Descripción</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={3}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+            />
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Orden</label>
+              <input
+                type="number"
+                value={formData.order}
+                onChange={(e) => setFormData({ ...formData, order: parseInt(e.target.value) })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-neutral-300 mt-6">
+              <input
+                type="checkbox"
+                checked={formData.isActive}
+                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                className="rounded"
+              />
+              Activa
+            </label>
+          </div>
+          <div className="flex gap-4 mt-6">
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+            >
+              Guardar
+            </button>
+            <button
+              onClick={() => setEditingCategory(null)}
+              className="px-6 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="font-display text-3xl text-secondary">Categorías</h1>
+        <button
+          onClick={() => setEditingCategory({} as Category)}
+          className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+        >
+          + Nueva Categoría
+        </button>
+      </div>
+      <div className="space-y-4">
+        {categories.map((category) => (
+          <div key={category.id} className="bg-neutral-900 border border-neutral-700 rounded-lg p-4 flex items-center justify-between">
+            <div>
+              <h3 className="font-display text-lg text-secondary">{category.name}</h3>
+              {category.description && (
+                <p className="text-neutral-400 text-sm">{category.description}</p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditingCategory(category)}
+                className="px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+              >
+                Editar
+              </button>
+              <button
+                onClick={() => handleDelete(category.id)}
+                className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Events Section
+function EventsSection({
+  events,
+  editingEvent,
+  setEditingEvent,
+  token,
+  onReload,
+}: {
+  events: Event[];
+  editingEvent: Event | null;
+  setEditingEvent: (e: Event | null) => void;
+  token: string;
+  onReload: () => void;
+}) {
+  const [formData, setFormData] = useState<any>({
+    title: '',
+    event_type: '',
+    location: '',
+    guests_range: '',
+    highlight_menu: '',
+    description: '',
+    images: [],
+    isActive: true,
+  });
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (editingEvent) {
+      setFormData({
+        id: editingEvent.id,
+        title: editingEvent.title,
+        event_type: editingEvent.eventType,
+        location: editingEvent.location,
+        guests_range: editingEvent.guestsRange,
+        highlight_menu: editingEvent.highlightMenu,
+        description: editingEvent.description,
+        images: editingEvent.images || [],
+        isActive: editingEvent.isActive,
+      });
+      setImagePreviews(editingEvent.images || []);
+    } else {
+      setFormData({
+        title: '',
+        event_type: '',
+        location: '',
+        guests_range: '',
+        highlight_menu: '',
+        description: '',
+        images: [],
+        isActive: true,
+      });
+      setImagePreviews([]);
+    }
+  }, [editingEvent]);
+
+  const validateImageFile = (file: File): { valid: boolean; error?: string } => {
+    const maxSize = 1572864;
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (file.size > maxSize) {
+      return { valid: false, error: 'El archivo excede el tamaño máximo de 1.5MB' };
+    }
+    if (!allowedTypes.includes(file.type)) {
+      return { valid: false, error: 'Tipo de archivo no permitido. Solo JPEG, PNG y WebP' };
+    }
+    return { valid: true };
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
       return;
     }
 
-    let updated: Event[];
-    if (editing?.id) {
-      updated = events.map((e) => (e.id === editing.id ? { ...formData, id: editing.id } as Event : e));
-    } else {
-      const newEvent: Event = {
-        id: `evento-${Date.now()}`,
-        title: formData.title,
-        eventType: formData.eventType,
-        location: formData.location || '',
-        guestsRange: formData.guestsRange || '',
-        highlightMenu: formData.highlightMenu || '',
-        description: formData.description || '',
-        images: formData.images || ['/images/gallery-bbq-01.jpg'],
-        isActive: formData.isActive !== undefined ? formData.isActive : true,
-      };
-      updated = [...events, newEvent];
+    if (formData.images.length >= 5) {
+      alert('Máximo 5 imágenes por evento');
+      return;
     }
-    onUpdate(updated);
-    onEdit(null);
-    setFormData({});
-  };
 
-  const handleDelete = (id: string) => {
-    if (confirm('¿Eliminar este evento?')) {
-      onUpdate(events.filter((e) => e.id !== id));
-    }
-  };
+    setUploadingImage(true);
+    try {
+      const entityId = editingEvent?.id || 'temp-' + Date.now();
+      const signResponse = await apiFetch<{ signedUrl: string; path: string }>('admin-assets-sign-upload', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          entityId,
+          filename: file.name,
+          contentType: file.type,
+        }),
+      });
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const base64 = await imageToBase64(file);
-        const images = formData.images || [];
-        images[index] = base64;
-        setFormData({ ...formData, images });
-      } catch (error) {
-        alert('Error al cargar imagen');
-      }
+      const uploadResponse = await fetch(signResponse.signedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+
+      if (!uploadResponse.ok) throw new Error('Error al subir la imagen');
+
+      const newImages = [...formData.images, signResponse.path];
+      setFormData({ ...formData, images: newImages });
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreviews([...imagePreviews, previewUrl]);
+      alert('Imagen subida exitosamente');
+    } catch (error: any) {
+      alert(`Error al subir imagen: ${error.message}`);
+    } finally {
+      setUploadingImage(false);
+      if (e.target) e.target.value = '';
     }
   };
 
-  if (editing) {
+  const handleRemoveImage = (index: number) => {
+    const newImages = formData.images.filter((_: any, i: number) => i !== index);
+    const newPreviews = imagePreviews.filter((_, i) => i !== index);
+    setFormData({ ...formData, images: newImages });
+    setImagePreviews(newPreviews);
+  };
+
+  const handleSave = async () => {
+    try {
+      await apiFetch('admin-events-upsert', {
+        method: editingEvent ? 'PUT' : 'POST',
+        token,
+        body: JSON.stringify({
+          ...formData,
+          is_active: formData.isActive,
+        }),
+      });
+      setEditingEvent(null);
+      onReload();
+      alert('Evento guardado exitosamente');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Eliminar este evento?')) return;
+    try {
+      await apiFetch('admin-events-delete', {
+        method: 'DELETE',
+        token,
+        query: { id },
+      });
+      onReload();
+      alert('Evento eliminado');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  if (editingEvent || formData.title) {
     return (
-      <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 mb-6">
-        <h3 className="font-display text-xl text-secondary mb-4">
-          {editing.id ? 'Editar Evento' : 'Nuevo Evento'}
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <h1 className="font-display text-2xl text-secondary mb-4">
+          {editingEvent ? 'Editar Evento' : 'Nuevo Evento'}
+        </h1>
+        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-neutral-300 mb-2">Título *</label>
             <input
               type="text"
-              value={formData.title || ''}
+              value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Tipo *</label>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Tipo de Evento *</label>
             <select
-              value={formData.eventType || ''}
-              onChange={(e) => setFormData({ ...formData, eventType: e.target.value })}
+              value={formData.event_type}
+              onChange={(e) => setFormData({ ...formData, event_type: e.target.value })}
               className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
             >
-              <option value="">Seleccionar</option>
+              <option value="">Seleccionar...</option>
               <option value="Social">Social</option>
               <option value="Corporativo">Corporativo</option>
               <option value="Boda">Boda</option>
@@ -606,230 +1542,296 @@ function EventManager({
               <option value="Foodtruck">Foodtruck</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Ubicación</label>
-            <input
-              type="text"
-              value={formData.location || ''}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Cantidad de personas</label>
-            <input
-              type="text"
-              value={formData.guestsRange || ''}
-              onChange={(e) => setFormData({ ...formData, guestsRange: e.target.value })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Menú destacado</label>
-            <input
-              type="text"
-              value={formData.highlightMenu || ''}
-              onChange={(e) => setFormData({ ...formData, highlightMenu: e.target.value })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Descripción</label>
-            <textarea
-              value={formData.description || ''}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={3}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Imágenes</label>
-            <div className="space-y-2">
-              {(formData.images || ['']).map((img, idx) => (
-                <div key={idx} className="flex gap-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, idx)}
-                    className="flex-1 px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-                  />
-                  {img && <img src={img} alt={`Preview ${idx}`} className="w-20 h-20 object-cover rounded" />}
-                </div>
-              ))}
-              <button
-                onClick={() => setFormData({ ...formData, images: [...(formData.images || []), ''] })}
-                className="px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded"
-              >
-                + Agregar imagen
-              </button>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Ubicación</label>
+              <input
+                type="text"
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Rango de Invitados</label>
+              <input
+                type="text"
+                value={formData.guests_range}
+                onChange={(e) => setFormData({ ...formData, guests_range: e.target.value })}
+                placeholder="Ej: 50-100 personas"
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
             </div>
           </div>
           <div>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={formData.isActive !== false}
-                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="mr-2"
-              />
-              <span className="text-neutral-300">Activo</span>
-            </label>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Menú Destacado</label>
+            <input
+              type="text"
+              value={formData.highlight_menu}
+              onChange={(e) => setFormData({ ...formData, highlight_menu: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+            />
           </div>
-        </div>
-        <div className="flex gap-4 mt-6">
-          <button
-            onClick={handleSave}
-            className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-          >
-            Guardar
-          </button>
-          <button
-            onClick={() => {
-              onEdit(null);
-              setFormData({});
-            }}
-            className="px-6 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700 transition-colors"
-          >
-            Cancelar
-          </button>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Descripción</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={4}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">
+              Imágenes ({formData.images.length}/5)
+            </label>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleImageUpload}
+              disabled={uploadingImage || formData.images.length >= 5}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary mb-2"
+            />
+            {uploadingImage && <p className="text-neutral-400 text-sm">Subiendo imagen...</p>}
+            {formData.images.length >= 5 && (
+              <p className="text-accent text-sm">Máximo 5 imágenes alcanzado</p>
+            )}
+            {imagePreviews.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+                {imagePreviews.map((preview, index) => (
+                  <div key={index} className="relative">
+                    <img
+                      src={preview}
+                      alt={`Preview ${index + 1}`}
+                      className="w-full h-32 object-cover rounded border border-neutral-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage(index)}
+                      className="absolute top-2 right-2 bg-accent text-secondary rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-accent/90"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <label className="flex items-center gap-2 text-neutral-300">
+            <input
+              type="checkbox"
+              checked={formData.isActive}
+              onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+              className="rounded"
+            />
+            Activo
+          </label>
+
+          <div className="flex gap-4 mt-6">
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+            >
+              Guardar
+            </button>
+            <button
+              onClick={() => setEditingEvent(null)}
+              className="px-6 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {events.map((event) => (
-        <div key={event.id} className="bg-neutral-900 border border-neutral-700 rounded-lg p-4 flex items-center gap-4">
-          {event.images[0] && (
-            <img src={event.images[0]} alt={event.title} className="w-20 h-20 object-cover rounded" />
-          )}
-          <div className="flex-1">
-            <h3 className="font-display text-lg text-secondary">{event.title}</h3>
-            <p className="text-neutral-400 text-sm">{event.eventType} • {event.location}</p>
-            <p className="text-neutral-500 text-xs">{event.guestsRange}</p>
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="font-display text-3xl text-secondary">Eventos</h1>
+        <button
+          onClick={() => setEditingEvent({} as Event)}
+          className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+        >
+          + Nuevo Evento
+        </button>
+      </div>
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {events.map((event) => (
+          <div key={event.id} className="bg-neutral-900 border border-neutral-700 rounded-lg p-4">
+            {event.images && event.images.length > 0 && (
+              <img src={event.images[0]} alt={event.title} className="w-full h-32 object-cover rounded mb-2" />
+            )}
+            <h3 className="font-display text-lg text-secondary mb-2">{event.title}</h3>
+            <p className="text-neutral-400 text-sm mb-2">{event.eventType}</p>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setEditingEvent(event)}
+                className="flex-1 px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+              >
+                Editar
+              </button>
+              <button
+                onClick={() => handleDelete(event.id)}
+                className="flex-1 px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+              >
+                Eliminar
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onEdit(event)}
-              className="px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700 transition-colors"
-            >
-              Editar
-            </button>
-            <button
-              onClick={() => handleDelete(event.id)}
-              className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-            >
-              Eliminar
-            </button>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
 
-// Promo Manager Component
-function PromoManager({
+// Promos Section
+function PromosSection({
   promos,
-  onUpdate,
-  editing,
-  onEdit,
+  editingPromo,
+  setEditingPromo,
+  token,
+  onReload,
 }: {
   promos: Promo[];
-  onUpdate: (promos: Promo[]) => void;
-  editing: Promo | null;
-  onEdit: (promo: Promo | null) => void;
+  editingPromo: Promo | null;
+  setEditingPromo: (p: Promo | null) => void;
+  token: string;
+  onReload: () => void;
 }) {
-  const [formData, setFormData] = useState<Partial<Promo>>({});
+  const [formData, setFormData] = useState<any>({
+    banco: '',
+    dia: '',
+    topeReintegro: '',
+    porcentaje: '',
+    medios: [],
+    vigencia: '',
+    isActive: true,
+  });
 
   useEffect(() => {
-    if (editing) {
-      setFormData(editing.id ? editing : {});
-    }
-  }, [editing]);
-
-  const handleSave = () => {
-    if (!formData.banco || !formData.dia) {
-      alert('Completa los campos obligatorios');
-      return;
-    }
-
-    let updated: Promo[];
-    if (editing?.id) {
-      updated = promos.map((p) => (p.id === editing.id ? { ...formData, id: editing.id } as Promo : p));
+    if (editingPromo) {
+      setFormData({
+        id: editingPromo.id,
+        banco: editingPromo.banco,
+        dia: editingPromo.dia,
+        topeReintegro: editingPromo.topeReintegro.toString(),
+        porcentaje: editingPromo.porcentaje.toString(),
+        medios: editingPromo.medios || [],
+        vigencia: editingPromo.vigencia,
+        isActive: true,
+      });
     } else {
-      const newPromo: Promo = {
-        id: `promo-${Date.now()}`,
-        banco: formData.banco,
-        dia: formData.dia,
-        topeReintegro: formData.topeReintegro || 0,
-        porcentaje: formData.porcentaje || 0,
-        medios: formData.medios || [],
-        vigencia: formData.vigencia || '',
-      };
-      updated = [...promos, newPromo];
+      setFormData({
+        banco: '',
+        dia: '',
+        topeReintegro: '',
+        porcentaje: '',
+        medios: [],
+        vigencia: '',
+        isActive: true,
+      });
     }
-    onUpdate(updated);
-    onEdit(null);
-    setFormData({});
+  }, [editingPromo]);
+
+  const handleSave = async () => {
+    try {
+      await apiFetch('admin-promos-upsert', {
+        method: editingPromo ? 'PUT' : 'POST',
+        token,
+        body: JSON.stringify({
+          ...formData,
+          topeReintegro: parseFloat(formData.topeReintegro || '0'),
+          porcentaje: parseFloat(formData.porcentaje || '0'),
+          medios: typeof formData.medios === 'string' 
+            ? formData.medios.split(',').map((m: string) => m.trim())
+            : formData.medios,
+          is_active: formData.isActive,
+        }),
+      });
+      setEditingPromo(null);
+      onReload();
+      alert('Promoción guardada exitosamente');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('¿Eliminar esta promoción?')) {
-      onUpdate(promos.filter((p) => p.id !== id));
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Eliminar esta promoción?')) return;
+    try {
+      await apiFetch('admin-promos-delete', {
+        method: 'DELETE',
+        token,
+        query: { id },
+      });
+      onReload();
+      alert('Promoción eliminada');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
     }
   };
 
-  if (editing) {
+  if (editingPromo || formData.banco) {
     return (
-      <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 mb-6">
-        <h3 className="font-display text-xl text-secondary mb-4">
-          {editing.id ? 'Editar Promoción' : 'Nueva Promoción'}
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Banco *</label>
-            <input
-              type="text"
-              value={formData.banco || ''}
-              onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
+      <div>
+        <h1 className="font-display text-2xl text-secondary mb-4">
+          {editingPromo ? 'Editar Promoción' : 'Nueva Promoción'}
+        </h1>
+        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Banco *</label>
+              <input
+                type="text"
+                value={formData.banco}
+                onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Día *</label>
+              <input
+                type="text"
+                value={formData.dia}
+                onChange={(e) => setFormData({ ...formData, dia: e.target.value })}
+                placeholder="Ej: Jueves"
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Día *</label>
-            <input
-              type="text"
-              value={formData.dia || ''}
-              onChange={(e) => setFormData({ ...formData, dia: e.target.value })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Tope Reintegro</label>
-            <input
-              type="number"
-              value={formData.topeReintegro || 0}
-              onChange={(e) => setFormData({ ...formData, topeReintegro: Number(e.target.value) })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Porcentaje</label>
-            <input
-              type="number"
-              value={formData.porcentaje || 0}
-              onChange={(e) => setFormData({ ...formData, porcentaje: Number(e.target.value) })}
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Tope Reintegro</label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.topeReintegro}
+                onChange={(e) => setFormData({ ...formData, topeReintegro: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Porcentaje</label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.porcentaje}
+                onChange={(e) => setFormData({ ...formData, porcentaje: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-neutral-300 mb-2">Medios (separados por coma)</label>
             <input
               type="text"
-              value={formData.medios?.join(', ') || ''}
-              onChange={(e) => setFormData({ ...formData, medios: e.target.value.split(',').map((m) => m.trim()) })}
+              value={typeof formData.medios === 'string' ? formData.medios : formData.medios.join(', ')}
+              onChange={(e) => setFormData({ ...formData, medios: e.target.value })}
+              placeholder="Ej: crédito, débito, MODO"
               className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
             />
           </div>
@@ -837,120 +1839,172 @@ function PromoManager({
             <label className="block text-sm font-medium text-neutral-300 mb-2">Vigencia</label>
             <input
               type="text"
-              value={formData.vigencia || ''}
+              value={formData.vigencia}
               onChange={(e) => setFormData({ ...formData, vigencia: e.target.value })}
+              placeholder="Ej: Hasta 31/12/2024"
               className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
             />
           </div>
-        </div>
-        <div className="flex gap-4 mt-6">
-          <button
-            onClick={handleSave}
-            className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-          >
-            Guardar
-          </button>
-          <button
-            onClick={() => {
-              onEdit(null);
-              setFormData({});
-            }}
-            className="px-6 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700 transition-colors"
-          >
-            Cancelar
-          </button>
+          <label className="flex items-center gap-2 text-neutral-300">
+            <input
+              type="checkbox"
+              checked={formData.isActive}
+              onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+              className="rounded"
+            />
+            Activa
+          </label>
+          <div className="flex gap-4 mt-6">
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+            >
+              Guardar
+            </button>
+            <button
+              onClick={() => setEditingPromo(null)}
+              className="px-6 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {promos.map((promo) => (
-        <div key={promo.id} className="bg-neutral-900 border border-neutral-700 rounded-lg p-4">
-          <h3 className="font-display text-lg text-secondary">{promo.banco}</h3>
-          <p className="text-neutral-400 text-sm">{promo.dia}: {promo.porcentaje}% reintegro</p>
-          <p className="text-neutral-500 text-xs">Tope: ${promo.topeReintegro.toLocaleString('es-AR')}</p>
-          <div className="flex gap-2 mt-4">
-            <button
-              onClick={() => onEdit(promo)}
-              className="px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700 transition-colors"
-            >
-              Editar
-            </button>
-            <button
-              onClick={() => handleDelete(promo.id)}
-              className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-            >
-              Eliminar
-            </button>
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="font-display text-3xl text-secondary">Promociones</h1>
+        <button
+          onClick={() => setEditingPromo({} as Promo)}
+          className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+        >
+          + Nueva Promoción
+        </button>
+      </div>
+      <div className="space-y-4">
+        {promos.map((promo) => (
+          <div key={promo.id} className="bg-neutral-900 border border-neutral-700 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-lg text-secondary">{promo.banco} - {promo.dia}</h3>
+                <p className="text-neutral-400 text-sm">
+                  {promo.porcentaje}% reintegro, tope ${promo.topeReintegro.toLocaleString('es-AR')}
+                </p>
+                <p className="text-neutral-400 text-xs mt-1">Medios: {promo.medios.join(', ')}</p>
+                {promo.vigencia && (
+                  <p className="text-neutral-400 text-xs">Vigencia: {promo.vigencia}</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditingPromo(promo)}
+                  className="px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+                >
+                  Editar
+                </button>
+                <button
+                  onClick={() => handleDelete(promo.id)}
+                  className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
 
-// FAQ Manager Component
-function FAQManager({
+// FAQs Section
+function FAQsSection({
   faqs,
-  onUpdate,
-  editing,
-  onEdit,
+  editingFAQ,
+  setEditingFAQ,
+  token,
+  onReload,
 }: {
   faqs: FAQ[];
-  onUpdate: (faqs: FAQ[]) => void;
-  editing: FAQ | null;
-  onEdit: (faq: FAQ | null) => void;
+  editingFAQ: FAQ | null;
+  setEditingFAQ: (f: FAQ | null) => void;
+  token: string;
+  onReload: () => void;
 }) {
-  const [formData, setFormData] = useState<Partial<FAQ>>({});
+  const [formData, setFormData] = useState<any>({
+    question: '',
+    answer: '',
+    order: 0,
+    isActive: true,
+  });
 
   useEffect(() => {
-    if (editing) {
-      setFormData(editing.id ? editing : {});
-    }
-  }, [editing]);
-
-  const handleSave = () => {
-    if (!formData.question || !formData.answer) {
-      alert('Completa los campos obligatorios');
-      return;
-    }
-
-    let updated: FAQ[];
-    if (editing?.id) {
-      updated = faqs.map((f) => (f.id === editing.id ? { ...formData, id: editing.id } as FAQ : f));
+    if (editingFAQ) {
+      setFormData({
+        id: editingFAQ.id,
+        question: editingFAQ.question,
+        answer: editingFAQ.answer,
+        order: 0,
+        isActive: true,
+      });
     } else {
-      const newFAQ: FAQ = {
-        id: `faq-${Date.now()}`,
-        question: formData.question,
-        answer: formData.answer,
-      };
-      updated = [...faqs, newFAQ];
+      setFormData({
+        question: '',
+        answer: '',
+        order: faqs.length,
+        isActive: true,
+      });
     }
-    onUpdate(updated);
-    onEdit(null);
-    setFormData({});
+  }, [editingFAQ, faqs.length]);
+
+  const handleSave = async () => {
+    try {
+      await apiFetch('admin-faqs-upsert', {
+        method: editingFAQ ? 'PUT' : 'POST',
+        token,
+        body: JSON.stringify({
+          ...formData,
+          is_active: formData.isActive,
+        }),
+      });
+      setEditingFAQ(null);
+      onReload();
+      alert('FAQ guardada exitosamente');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('¿Eliminar esta FAQ?')) {
-      onUpdate(faqs.filter((f) => f.id !== id));
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Eliminar esta FAQ?')) return;
+    try {
+      await apiFetch('admin-faqs-delete', {
+        method: 'DELETE',
+        token,
+        query: { id },
+      });
+      onReload();
+      alert('FAQ eliminada');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
     }
   };
 
-  if (editing) {
+  if (editingFAQ || formData.question) {
     return (
-      <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 mb-6">
-        <h3 className="font-display text-xl text-secondary mb-4">
-          {editing.id ? 'Editar FAQ' : 'Nueva FAQ'}
-        </h3>
-        <div className="space-y-4">
+      <div>
+        <h1 className="font-display text-2xl text-secondary mb-4">
+          {editingFAQ ? 'Editar FAQ' : 'Nueva FAQ'}
+        </h1>
+        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-neutral-300 mb-2">Pregunta *</label>
             <input
               type="text"
-              value={formData.question || ''}
+              value={formData.question}
               onChange={(e) => setFormData({ ...formData, question: e.target.value })}
               className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
             />
@@ -958,56 +2012,498 @@ function FAQManager({
           <div>
             <label className="block text-sm font-medium text-neutral-300 mb-2">Respuesta *</label>
             <textarea
-              value={formData.answer || ''}
+              value={formData.answer}
               onChange={(e) => setFormData({ ...formData, answer: e.target.value })}
               rows={5}
               className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
             />
           </div>
-        </div>
-        <div className="flex gap-4 mt-6">
-          <button
-            onClick={handleSave}
-            className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-          >
-            Guardar
-          </button>
-          <button
-            onClick={() => {
-              onEdit(null);
-              setFormData({});
-            }}
-            className="px-6 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700 transition-colors"
-          >
-            Cancelar
-          </button>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Orden</label>
+            <input
+              type="number"
+              value={formData.order}
+              onChange={(e) => setFormData({ ...formData, order: parseInt(e.target.value) })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-neutral-300">
+            <input
+              type="checkbox"
+              checked={formData.isActive}
+              onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+              className="rounded"
+            />
+            Activa
+          </label>
+          <div className="flex gap-4 mt-6">
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+            >
+              Guardar
+            </button>
+            <button
+              onClick={() => setEditingFAQ(null)}
+              className="px-6 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {faqs.map((faq) => (
-        <div key={faq.id} className="bg-neutral-900 border border-neutral-700 rounded-lg p-4">
-          <h3 className="font-display text-lg text-secondary mb-2">{faq.question}</h3>
-          <p className="text-neutral-400 text-sm mb-4">{faq.answer}</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onEdit(faq)}
-              className="px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700 transition-colors"
-            >
-              Editar
-            </button>
-            <button
-              onClick={() => handleDelete(faq.id)}
-              className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90 transition-colors"
-            >
-              Eliminar
-            </button>
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="font-display text-3xl text-secondary">FAQs</h1>
+        <button
+          onClick={() => setEditingFAQ({} as FAQ)}
+          className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+        >
+          + Nueva FAQ
+        </button>
+      </div>
+      <div className="space-y-4">
+        {faqs.map((faq) => (
+          <div key={faq.id} className="bg-neutral-900 border border-neutral-700 rounded-lg p-4">
+            <h3 className="font-display text-lg text-secondary mb-2">{faq.question}</h3>
+            <p className="text-neutral-400 text-sm mb-4">{faq.answer}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditingFAQ(faq)}
+                className="px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+              >
+                Editar
+              </button>
+              <button
+                onClick={() => handleDelete(faq.id)}
+                className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OrdersSection({
+  orders,
+  selectedOrder,
+  orderNotes,
+  newNote,
+  setNewNote,
+  onSelectOrder,
+  onUpdateOrder,
+  token,
+}: {
+  orders: Order[];
+  selectedOrder: Order | null;
+  orderNotes: OrderNote[];
+  newNote: string;
+  setNewNote: (n: string) => void;
+  onSelectOrder: (id: string) => void;
+  onUpdateOrder: () => void;
+  token: string;
+}) {
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [pendingWhatsAppUrl, setPendingWhatsAppUrl] = useState<string | null>(null);
+
+  const filteredOrders = statusFilter === 'all' 
+    ? orders 
+    : orders.filter(o => o.status === statusFilter);
+
+  const handleStatusChange = async (orderId: string, newStatus: string) => {
+    try {
+      // Intentar con Netlify Function primero
+      try {
+        await apiFetch('admin-orders-update', {
+          method: 'PUT',
+          token,
+          body: JSON.stringify({ id: orderId, status: newStatus }),
+        });
+      } catch (netlifyError) {
+        // Si falla y estamos en desarrollo, usar Supabase directo
+        if (import.meta.env.DEV) {
+          console.warn('Netlify Functions no disponibles, usando Supabase directo para actualizar orden');
+          const { updateOrderStatusDev } = await import('../lib/ordersDev');
+          await updateOrderStatusDev(orderId, newStatus);
+        } else {
+          throw netlifyError;
+        }
+      }
+      onUpdateOrder();
+      if (selectedOrder?.id === orderId) {
+        onSelectOrder(orderId);
+      }
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!selectedOrder || !newNote.trim()) return;
+    try {
+      let result: { whatsapp_url: string | null };
+      
+      // Intentar con Netlify Function primero
+      try {
+        result = await apiFetch<{ whatsapp_url: string }>('admin-orders-send-note', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            order_id: selectedOrder.id,
+            note: newNote,
+          }),
+        });
+      } catch (netlifyError) {
+        // Si falla y estamos en desarrollo, usar Supabase directo
+        if (import.meta.env.DEV) {
+          console.warn('Netlify Functions no disponibles, usando Supabase directo para agregar nota');
+          const { addOrderNoteDev } = await import('../lib/ordersDev');
+          // Obtener email del token si es posible
+          let createdBy = 'admin';
+          try {
+            const decoded = JSON.parse(atob(token));
+            createdBy = decoded.email || 'admin';
+          } catch {}
+          result = await addOrderNoteDev(selectedOrder.id, newNote, createdBy);
+        } else {
+          throw netlifyError;
+        }
+      }
+      
+      setNewNote('');
+      onSelectOrder(selectedOrder.id);
+      if (result.whatsapp_url) {
+        setPendingWhatsAppUrl(result.whatsapp_url);
+        setShowWhatsAppModal(true);
+      }
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  const handleWhatsAppConfirm = () => {
+    if (pendingWhatsAppUrl) {
+      window.open(pendingWhatsAppUrl, '_blank');
+    }
+    setShowWhatsAppModal(false);
+    setPendingWhatsAppUrl(null);
+  };
+
+  const handleWhatsAppCancel = () => {
+    setShowWhatsAppModal(false);
+    setPendingWhatsAppUrl(null);
+  };
+
+  return (
+    <div>
+      {/* Modal de confirmación WhatsApp */}
+      {showWhatsAppModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M17.472 14.382c-.297-.149-1.758-1.013-2.03-1.262-.272-.25-.47-.369-.669.149-.198.519-.768 1.262-1.05 1.52-.281.258-.57.29-.99.099-.42-.191-1.776-.654-3.384-2.084-1.251-1.13-2.096-2.527-2.34-2.955-.243-.428-.027-.66.178-.88.182-.193.407-.428.61-.642.203-.214.271-.357.407-.595.136-.238.068-.446-.007-.624-.074-.178-.669-1.61-.916-2.207-.242-.579-.487-.5-.669-.31-.182.191-.757.925-.757 2.257 0 1.331.969 2.62 1.105 2.8.136.18.192.297.297.495.104.198.052.371-.015.545-.067.174-.297.297-.61.495-.312.198-.669.371-.916.545-.247.174-.428.297-.595.495-.167.198-.124.371.05.595.174.223.757 1.07 1.623 1.728 1.38.91 2.534 1.19 3.18 1.36.646.17 1.22.128 1.68.077.46-.05 1.42-.297 1.62-.644.198-.347.149-.644.099-.644-.05 0-.182-.05-.297-.099z"/>
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="font-display text-xl text-secondary mb-1">Enviar por WhatsApp</h3>
+                <p className="text-neutral-400 text-sm">¿Deseas enviar esta nota al cliente?</p>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleWhatsAppCancel}
+                className="flex-1 px-4 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-300 font-medium rounded hover:bg-neutral-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleWhatsAppConfirm}
+                className="flex-1 px-4 py-2.5 bg-green-600 text-white font-medium rounded hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M17.472 14.382c-.297-.149-1.758-1.013-2.03-1.262-.272-.25-.47-.369-.669.149-.198.519-.768 1.262-1.05 1.52-.281.258-.57.29-.99.099-.42-.191-1.776-.654-3.384-2.084-1.251-1.13-2.096-2.527-2.34-2.955-.243-.428-.027-.66.178-.88.182-.193.407-.428.61-.642.203-.214.271-.357.407-.595.136-.238.068-.446-.007-.624-.074-.178-.669-1.61-.916-2.207-.242-.579-.487-.5-.669-.31-.182.191-.757.925-.757 2.257 0 1.331.969 2.62 1.105 2.8.136.18.192.297.297.495.104.198.052.371-.015.545-.067.174-.297.297-.61.495-.312.198-.669.371-.916.545-.247.174-.428.297-.595.495-.167.198-.124.371.05.595.174.223.757 1.07 1.623 1.728 1.38.91 2.534 1.19 3.18 1.36.646.17 1.22.128 1.68.077.46-.05 1.42-.297 1.62-.644.198-.347.149-.644.099-.644-.05 0-.182-.05-.297-.099z"/>
+                </svg>
+                Enviar
+              </button>
+            </div>
           </div>
         </div>
-      ))}
+      )}
+
+      <h1 className="font-display text-3xl text-secondary mb-6">Órdenes</h1>
+      
+      <div className="mb-4 flex gap-2">
+        {['all', 'pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled'].map((status) => (
+          <button
+            key={status}
+            onClick={() => setStatusFilter(status)}
+            className={`px-4 py-2 rounded ${
+              statusFilter === status
+                ? 'bg-accent text-secondary'
+                : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+            }`}
+          >
+            {status === 'all' ? 'Todas' : status}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          {filteredOrders.map((order) => (
+            <div
+              key={order.id}
+              onClick={() => onSelectOrder(order.id)}
+              className={`bg-neutral-900 border rounded-lg p-4 cursor-pointer transition-colors ${
+                selectedOrder?.id === order.id
+                  ? 'border-accent bg-neutral-800'
+                  : 'border-neutral-700 hover:border-neutral-600'
+              }`}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <h3 className="font-display text-lg text-secondary">Pedido #{order.orderNumber}</h3>
+                  <p className="text-neutral-400 text-sm">{order.customerName}</p>
+                </div>
+                <span className={`px-2 py-1 rounded text-xs ${
+                  order.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' :
+                  order.status === 'confirmed' ? 'bg-blue-500/20 text-blue-500' :
+                  order.status === 'preparing' ? 'bg-purple-500/20 text-purple-500' :
+                  order.status === 'ready' ? 'bg-green-500/20 text-green-500' :
+                  order.status === 'delivered' ? 'bg-green-600/20 text-green-600' :
+                  'bg-red-500/20 text-red-500'
+                }`}>
+                  {order.status}
+                </span>
+              </div>
+              <p className="text-secondary font-medium">${order.total.toLocaleString('es-AR')}</p>
+              <p className="text-neutral-400 text-xs mt-1">{new Date(order.createdAt).toLocaleDateString('es-AR')}</p>
+            </div>
+          ))}
+        </div>
+
+        {selectedOrder && (
+          <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6">
+            <h2 className="font-display text-xl text-secondary mb-4">Detalle del Pedido #{selectedOrder.orderNumber}</h2>
+            
+            <div className="space-y-4 mb-6">
+              <div>
+                <p className="text-neutral-400 text-sm">Cliente</p>
+                <p className="text-secondary">{selectedOrder.customerName}</p>
+                <p className="text-neutral-400 text-sm">{selectedOrder.customerPhone}</p>
+              </div>
+              <div>
+                <p className="text-neutral-400 text-sm">Entrega</p>
+                <p className="text-secondary capitalize">{selectedOrder.deliveryType}</p>
+                {selectedOrder.zone && <p className="text-neutral-400 text-sm">{selectedOrder.zone}</p>}
+              </div>
+              <div>
+                <p className="text-neutral-400 text-sm">Pago</p>
+                <p className="text-secondary capitalize">{selectedOrder.paymentMethod}</p>
+              </div>
+              <div>
+                <p className="text-neutral-400 text-sm mb-2">Estado</p>
+                <select
+                  value={selectedOrder.status}
+                  onChange={(e) => handleStatusChange(selectedOrder.id, e.target.value)}
+                  className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+                >
+                  <option value="pending">Pendiente</option>
+                  <option value="confirmed">Confirmado</option>
+                  <option value="preparing">Preparando</option>
+                  <option value="ready">Listo</option>
+                  <option value="delivered">Entregado</option>
+                  <option value="cancelled">Cancelado</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="font-display text-lg text-secondary mb-2">Productos</h3>
+              <div className="space-y-2">
+                {selectedOrder.items.map((item: any, idx: number) => (
+                  <div key={idx} className="bg-neutral-800 rounded p-2 flex justify-between">
+                    <span className="text-secondary text-sm">{item.qty}x {item.name}</span>
+                    <span className="text-secondary text-sm">${(item.price * item.qty).toLocaleString('es-AR')}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 flex justify-between text-lg font-display text-secondary">
+                <span>Total</span>
+                <span>${selectedOrder.total.toLocaleString('es-AR')}</span>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="font-display text-lg text-secondary mb-2">Notas</h3>
+              <div className="space-y-2 mb-4">
+                {orderNotes.map((note) => (
+                  <div key={note.id} className="bg-neutral-800 rounded p-3">
+                    <p className="text-secondary text-sm">{note.note}</p>
+                    <p className="text-neutral-400 text-xs mt-1">
+                      {new Date(note.createdAt).toLocaleString('es-AR')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="Nueva nota..."
+                  className="flex-1 px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+                />
+                <button
+                  onClick={handleAddNote}
+                  className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+                >
+                  Agregar
+                </button>
+              </div>
+            </div>
+
+            {selectedOrder.whatsappMessage && (
+              <button
+                onClick={() => {
+                  const link = buildWhatsAppLink(WHATSAPP_NUMBER, selectedOrder.whatsappMessage!);
+                  window.open(link, '_blank');
+                }}
+                className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                Abrir WhatsApp
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ConfigSection({
+  config,
+  token,
+  onReload,
+}: {
+  config: SiteConfig | null;
+  token: string;
+  onReload: () => void;
+}) {
+  const [formData, setFormData] = useState<any>({
+    brand_name: '',
+    whatsapp: '',
+    email: '',
+    address: '',
+    zone: '',
+    payment_methods: [],
+    delivery_options: [],
+  });
+
+  useEffect(() => {
+    if (config) {
+      setFormData({
+        brand_name: config.brandName || '',
+        whatsapp: config.whatsapp || '',
+        email: config.email || '',
+        address: config.address || '',
+        zone: config.zone || '',
+        payment_methods: config.paymentMethods || [],
+        delivery_options: config.deliveryOptions || [],
+      });
+    }
+  }, [config]);
+
+  const handleSave = async () => {
+    try {
+      console.log('Guardando configuración:', formData);
+      const response = await apiFetch('admin-config-update', {
+        method: 'PUT',
+        token,
+        body: JSON.stringify(formData),
+      });
+      console.log('Configuración guardada:', response);
+      alert('Configuración guardada exitosamente');
+      onReload();
+    } catch (error: any) {
+      console.error('Error guardando configuración:', error);
+      const errorMessage = error?.message || 'Error desconocido';
+      alert(`Error: ${errorMessage}`);
+    }
+  };
+
+  return (
+    <div>
+      <h1 className="font-display text-3xl text-secondary mb-6">Configuración</h1>
+      <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-neutral-300 mb-2">Nombre de la marca</label>
+          <input
+            type="text"
+            value={formData.brand_name}
+            onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
+            className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+          />
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">WhatsApp</label>
+            <input
+              type="text"
+              value={formData.whatsapp}
+              onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Email</label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+            />
+          </div>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Dirección</label>
+            <input
+              type="text"
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Zona</label>
+            <input
+              type="text"
+              value={formData.zone}
+              onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleSave}
+          className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+        >
+          Guardar Configuración
+        </button>
+      </div>
     </div>
   );
 }

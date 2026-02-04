@@ -1,268 +1,272 @@
-import { useState } from 'react';
-import type { FormEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useCart } from '../context/CartContext';
-import type { CheckoutFormData } from '../types';
-import { openWhatsApp, formatCheckoutMessage } from '../utils/whatsapp';
+import { useCart } from '../cart/useCart';
+import { buildCartMessage, buildWhatsAppLink } from '../utils/cartWhatsApp';
+import { WHATSAPP_NUMBER } from '../utils/whatsapp';
+import { apiFetch } from '../lib/api';
+import { createOrderDev } from '../lib/ordersDev';
 
 export function Checkout() {
   const navigate = useNavigate();
-  const { items, total, clearCart } = useCart();
-  const [formData, setFormData] = useState<CheckoutFormData>({
+  const { items, total, clear } = useCart();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    deliveryType: 'entrega' as 'entrega' | 'retiro',
     zone: '',
-    deliveryType: 'retiro',
-    date: '',
-    timeSlot: '',
-    comments: '',
+    paymentMethod: 'efectivo' as
+      | 'efectivo'
+      | 'tarjeta'
+      | 'transferencia'
+      | 'modo'
+      | 'mercado'
+      | 'billeteras-qr',
+    notes: '',
   });
 
-  if (items.length === 0) {
-    return (
-      <div className="min-h-screen bg-primary flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-neutral-400 mb-4">Tu carrito está vacío</p>
-          <button
-            onClick={() => navigate('/tienda')}
-            className="px-6 py-3 bg-accent text-secondary font-medium rounded hover:bg-accent/90 transition-colors"
-          >
-            Ir a la tienda
-          </button>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (items.length === 0) {
+      navigate('/tienda');
+    }
+  }, [items, navigate]);
 
-  const handleSubmit = (e: FormEvent) => {
+  const isValid =
+    formData.name.trim().length > 0 &&
+    formData.phone.trim().length > 0 &&
+    (formData.deliveryType === 'retiro' || formData.zone.trim().length > 0);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const message = formatCheckoutMessage(
-      items.map((item) => ({
-        name: item.product.name,
-        quantity: item.quantity,
-        price: item.product.price * item.quantity,
+    if (!isValid || items.length === 0) return;
+
+    setIsSubmitting(true);
+    
+    // Crear orden en la base de datos
+    const orderData = {
+      customer_name: formData.name,
+      customer_phone: formData.phone,
+      delivery_type: formData.deliveryType,
+      zone: formData.deliveryType === 'entrega' ? formData.zone : null,
+      payment_method: formData.paymentMethod,
+      items: items.map((item) => ({
+        product_id: item.id,
+        name: item.name,
+        variant: item.variant,
+        price: item.price,
+        qty: item.qty,
         notes: item.notes,
       })),
-      total,
-      formData
-    );
-    openWhatsApp(message);
-    clearCart();
-    navigate('/');
+      notes: formData.notes,
+    };
+
+    try {
+      let response: { order_number: number; whatsapp_message: string };
+      
+      // Intentar con Netlify Function primero
+      try {
+        response = await apiFetch<{ order_number: number; whatsapp_message: string }>(
+          'orders-create',
+          {
+            method: 'POST',
+            body: JSON.stringify(orderData),
+          }
+        );
+      } catch (netlifyError) {
+        // Si falla y estamos en desarrollo, intentar con Supabase directo
+        if (import.meta.env.DEV) {
+          console.warn('Netlify Functions no disponibles, usando Supabase directo');
+          response = await createOrderDev(orderData);
+        } else {
+          throw netlifyError;
+        }
+      }
+
+      if (response.order_number && response.whatsapp_message) {
+        // Generar mensaje con número de orden
+        const finalMessage = `*Pedido #${response.order_number}*\n\n${response.whatsapp_message}`;
+        const link = buildWhatsAppLink(WHATSAPP_NUMBER, finalMessage);
+        window.open(link, '_blank');
+
+        // Limpiar carrito y redirigir
+        clear();
+        navigate('/tienda', { state: { orderCreated: true, orderNumber: response.order_number } });
+      } else {
+        throw new Error('No se recibió número de orden o mensaje de WhatsApp.');
+      }
+    } catch (error: any) {
+      console.error('Error al crear la orden:', error);
+      const errorMessage = error?.message || 'Error desconocido';
+      console.error('Detalles del error:', {
+        message: errorMessage,
+        orderData,
+        items: items.length,
+      });
+      alert(`Hubo un error al procesar tu pedido: ${errorMessage}. Por favor, inténtalo de nuevo.`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  return (
-    <div className="min-h-screen bg-primary">
-      <div className="container mx-auto px-4 py-12">
-        <h1 className="font-display text-3xl md:text-4xl text-secondary mb-8">
-          Checkout
-        </h1>
+  if (items.length === 0) {
+    return null;
+  }
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Resumen */}
-          <div className="lg:col-span-2">
-            <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 mb-6">
-              <h2 className="font-display text-xl text-secondary mb-4">
-                Resumen del pedido
-              </h2>
-              <div className="space-y-4">
-                {items.map((item) => (
-                  <div key={item.product.id} className="flex gap-4">
-                    <img
-                      src={item.product.image}
-                      alt={item.product.name}
-                      className="w-20 h-20 object-cover rounded"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = '/images/product-box-01.jpg';
-                      }}
-                    />
-                    <div className="flex-1">
-                      <h3 className="font-medium text-secondary">
-                        {item.product.name}
-                      </h3>
-                      <p className="text-neutral-400 text-sm">
-                        {item.quantity}x ${item.product.price.toLocaleString('es-AR')}
-                      </p>
-                      {item.notes && (
-                        <p className="text-neutral-500 text-xs mt-1">
-                          Nota: {item.notes}
-                        </p>
-                      )}
-                    </div>
-                    <p className="text-accent font-medium">
-                      ${(item.product.price * item.quantity).toLocaleString('es-AR')}
+  return (
+    <div className="min-h-screen bg-primary py-8 px-4">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="font-display text-4xl text-secondary mb-8">Checkout</h1>
+
+        <div className="grid md:grid-cols-2 gap-8">
+          {/* Resumen del pedido */}
+          <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6">
+            <h2 className="font-display text-2xl text-secondary mb-4">Tu pedido</h2>
+            <div className="space-y-4 mb-6">
+              {items.map((item) => (
+                <div key={`${item.id}-${item.variant || ''}`} className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-secondary">{item.name}</p>
+                    {item.variant && <p className="text-xs text-neutral-400">{item.variant}</p>}
+                    <p className="text-xs text-neutral-500 mt-1">
+                      {item.qty} x ${item.price.toLocaleString('es-AR')} = ${(item.price * item.qty).toLocaleString('es-AR')}
                     </p>
+                    {item.notes && (
+                      <p className="text-xs text-neutral-400 mt-1 italic">Nota: {item.notes}</p>
+                    )}
                   </div>
-                ))}
-              </div>
-              <div className="border-t border-neutral-700 mt-6 pt-6 flex justify-between items-center">
-                <span className="font-display text-xl text-secondary">Total</span>
-                <span className="font-display text-2xl text-accent">
-                  ${total.toLocaleString('es-AR')}
-                </span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-neutral-700 pt-4">
+              <div className="flex items-center justify-between text-lg font-display text-secondary">
+                <span>Total</span>
+                <span>${total.toLocaleString('es-AR')}</span>
               </div>
             </div>
+          </div>
 
-            {/* Formulario */}
-            <form onSubmit={handleSubmit} className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 space-y-4">
-              <h2 className="font-display text-xl text-secondary mb-4">
-                Datos de contacto
-              </h2>
+          {/* Formulario */}
+          <form onSubmit={handleSubmit} className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 space-y-4">
+            <h2 className="font-display text-2xl text-secondary mb-4">Tus datos</h2>
 
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">
+                Nombre y apellido *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-sm text-secondary placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-accent"
+                placeholder="Juan Pérez"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">
+                Teléfono *
+              </label>
+              <input
+                type="tel"
+                required
+                value={formData.phone}
+                onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-sm text-secondary placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-accent"
+                placeholder="+54 9 11 1234-5678"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">
+                Tipo de entrega *
+              </label>
+              <select
+                value={formData.deliveryType}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    deliveryType: e.target.value as 'entrega' | 'retiro',
+                    zone: e.target.value === 'retiro' ? '' : prev.zone,
+                  }))
+                }
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-sm text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
+              >
+                <option value="entrega">Entrega</option>
+                <option value="retiro">Retiro</option>
+              </select>
+            </div>
+
+            {formData.deliveryType === 'entrega' && (
               <div>
                 <label className="block text-sm font-medium text-neutral-300 mb-2">
-                  Nombre y apellido *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-300 mb-2">
-                  Teléfono *
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="+54 9 11 1234-5678"
-                  className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-300 mb-2">
-                  Zona (barrio/localidad) *
+                  Zona/barrio *
                 </label>
                 <input
                   type="text"
                   required
                   value={formData.zone}
-                  onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
-                  placeholder="Ej: Palermo, CABA"
-                  className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, zone: e.target.value }))}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-sm text-secondary placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-accent"
+                  placeholder="Palermo, CABA"
                 />
               </div>
+            )}
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-300 mb-2">
-                  Entrega *
-                </label>
-                <div className="flex gap-4">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="retiro"
-                      checked={formData.deliveryType === 'retiro'}
-                      onChange={(e) => setFormData({ ...formData, deliveryType: e.target.value as 'retiro' | 'envio' })}
-                      className="mr-2"
-                    />
-                    <span className="text-neutral-300">Retiro</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="envio"
-                      checked={formData.deliveryType === 'envio'}
-                      onChange={(e) => setFormData({ ...formData, deliveryType: e.target.value as 'retiro' | 'envio' })}
-                      className="mr-2"
-                    />
-                    <span className="text-neutral-300">Envío</span>
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-300 mb-2">
-                  Fecha deseada *
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-300 mb-2">
-                  Franja horaria deseada *
-                </label>
-                <select
-                  required
-                  value={formData.timeSlot}
-                  onChange={(e) => setFormData({ ...formData, timeSlot: e.target.value })}
-                  className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
-                >
-                  <option value="">Seleccionar</option>
-                  <option value="Mañana (9-12hs)">Mañana (9-12hs)</option>
-                  <option value="Mediodía (12-15hs)">Mediodía (12-15hs)</option>
-                  <option value="Tarde (15-18hs)">Tarde (15-18hs)</option>
-                  <option value="Noche (18-21hs)">Noche (18-21hs)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-300 mb-2">
-                  Comentarios
-                </label>
-                <textarea
-                  value={formData.comments}
-                  onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
-                  rows={4}
-                  placeholder="Instrucciones especiales, preferencias, etc."
-                  className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary focus:outline-none focus:ring-2 focus:ring-accent resize-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-4 bg-accent text-secondary font-medium rounded hover:bg-accent/90 transition-colors text-lg"
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">
+                Medio de pago *
+              </label>
+              <select
+                value={formData.paymentMethod}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    paymentMethod: e.target.value as typeof formData.paymentMethod,
+                  }))
+                }
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-sm text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
               >
-                Enviar pedido por WhatsApp
-              </button>
-            </form>
-          </div>
-
-          {/* Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 sticky top-24">
-              <h3 className="font-display text-lg text-secondary mb-4">
-                Resumen
-              </h3>
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-neutral-400">Productos</span>
-                  <span className="text-neutral-300">{items.length}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-neutral-400">Cantidad total</span>
-                  <span className="text-neutral-300">
-                    {items.reduce((sum, item) => sum + item.quantity, 0)}
-                  </span>
-                </div>
-              </div>
-              <div className="border-t border-neutral-700 pt-4">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="font-display text-lg text-secondary">Total</span>
-                  <span className="font-display text-2xl text-accent">
-                    ${total.toLocaleString('es-AR')}
-                  </span>
-                </div>
-                <p className="text-neutral-500 text-xs">
-                  Al enviar, se abrirá WhatsApp con tu pedido completo listo para enviar.
-                </p>
-              </div>
+                <option value="efectivo">Efectivo</option>
+                <option value="tarjeta">Tarjeta</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="modo">MODO</option>
+                <option value="mercado">Mercado Pago</option>
+                <option value="billeteras-qr">Billeteras QR</option>
+              </select>
             </div>
-          </div>
+
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">
+                Notas (opcional)
+              </label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-3 text-sm text-secondary placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-accent resize-none min-h-[100px]"
+                placeholder="Aclaraciones, preferencias, etc."
+              />
+            </div>
+
+            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-3">
+              <p className="text-xs text-neutral-400">
+                <span className="font-medium text-neutral-300">Importante:</span> Los pedidos serán mediante transferencia de seña a coordinar en el próximo paso.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={!isValid || isSubmitting}
+              className={`w-full rounded-lg px-6 py-3 text-sm font-medium transition-colors ${
+                isValid && !isSubmitting
+                  ? 'bg-accent text-secondary hover:bg-accent/90'
+                  : 'bg-neutral-800 text-neutral-500 pointer-events-none cursor-not-allowed'
+              }`}
+            >
+              {isSubmitting ? 'Creando pedido...' : 'Enviar pedido por WhatsApp'}
+            </button>
+          </form>
         </div>
       </div>
     </div>

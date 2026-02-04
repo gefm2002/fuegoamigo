@@ -10,6 +10,7 @@ import { Home } from './pages/Home';
 import { Tienda } from './pages/Tienda';
 import { Producto } from './pages/Producto';
 import { Eventos } from './pages/Eventos';
+import { Checkout } from './pages/Checkout';
 import { Admin } from './pages/Admin';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,7 @@ function MainContent() {
             <Route path="/tienda" element={<Tienda />} />
             <Route path="/producto/:slug" element={<Producto />} />
             <Route path="/eventos" element={<Eventos />} />
+            <Route path="/checkout" element={<Checkout />} />
             <Route path="/admin" element={<Admin />} />
           </Routes>
         </main>

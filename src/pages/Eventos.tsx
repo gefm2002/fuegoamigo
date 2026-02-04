@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ModalQuoteForm } from '../components/ModalQuoteForm';
-import { useEvents } from '../hooks/useData';
+import { useEvents } from '../hooks/useSupabaseData';
 
 const eventTypes = ['Todas', 'Social', 'Corporativo', 'Boda', 'Cumple', 'Producción', 'Feria', 'Foodtruck'];
 

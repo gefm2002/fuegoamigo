@@ -10,6 +10,70 @@ export interface Product {
   stock: number;
   isActive: boolean;
   featured: boolean;
+  discountFixed?: number;
+  discountPercentage?: number;
+  isOffer?: boolean;
+  isMadeToOrder?: boolean;
+}
+
+export interface Category {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string;
+  image?: string;
+  isActive: boolean;
+  order: number;
+}
+
+export interface SiteConfig {
+  id: string;
+  brandName: string;
+  whatsapp?: string;
+  email?: string;
+  address?: string;
+  zone?: string;
+  hours?: Record<string, string>;
+  paymentMethods?: string[];
+  deliveryOptions?: string[];
+  waTemplates?: Record<string, string>;
+}
+
+export interface Order {
+  id: string;
+  orderNumber: number;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone: string;
+  deliveryType: 'entrega' | 'retiro';
+  zone?: string;
+  paymentMethod: string;
+  items: OrderItem[];
+  subtotal: number;
+  total: number;
+  notes?: string;
+  whatsappMessage?: string;
+  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrderItem {
+  id?: string;
+  product_id?: string;
+  name: string;
+  variant?: string;
+  price: number;
+  qty: number;
+  notes?: string;
+}
+
+export interface OrderNote {
+  id: string;
+  orderId: string;
+  note: string;
+  createdBy?: string;
+  createdAt: string;
 }
 
 export interface CartItem {

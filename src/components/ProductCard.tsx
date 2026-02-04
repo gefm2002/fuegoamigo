@@ -11,11 +11,26 @@ export function ProductCard({ product }: ProductCardProps) {
   const { addItem } = useCart();
   const { openDrawer } = useCartDrawer();
 
+  // Calcular precio final con descuentos
+  const getFinalPrice = () => {
+    let finalPrice = product.price;
+    if (product.discountPercentage && product.discountPercentage > 0) {
+      finalPrice = finalPrice * (1 - product.discountPercentage / 100);
+    }
+    if (product.discountFixed && product.discountFixed > 0) {
+      finalPrice = finalPrice - product.discountFixed;
+    }
+    return Math.max(0, finalPrice);
+  };
+
+  const finalPrice = getFinalPrice();
+  const hasDiscount = finalPrice < product.price;
+
   const handleAddToCart = () => {
     addItem({
       id: product.id,
       name: product.name,
-      price: product.price,
+      price: finalPrice, // Usar precio con descuento
       qty: 1,
       image: product.image,
     });
@@ -23,9 +38,39 @@ export function ProductCard({ product }: ProductCardProps) {
   };
 
   return (
-    <div className="bg-neutral-900 border border-neutral-700 rounded-lg overflow-hidden hover:border-accent transition-colors">
+    <div className="bg-neutral-900 border border-neutral-700 rounded-lg overflow-hidden hover:border-accent transition-colors relative">
+      {/* Badges */}
+      {product.isOffer && (
+        <div className="absolute top-2 right-2 z-10">
+          {product.discountPercentage && product.discountPercentage > 0 && (
+            <span className="bg-accent text-secondary px-2 py-1 rounded text-xs font-bold">
+              -{product.discountPercentage}%
+            </span>
+          )}
+          {product.discountFixed && product.discountFixed > 0 && !product.discountPercentage && (
+            <span className="bg-accent text-secondary px-2 py-1 rounded text-xs font-bold">
+              -${product.discountFixed.toLocaleString('es-AR')}
+            </span>
+          )}
+        </div>
+      )}
+      {product.featured && (
+        <div className="absolute top-2 left-2 z-10">
+          <span className="bg-yellow-500 text-primary px-2 py-1 rounded text-xs font-bold">
+            ⭐ Destacado
+          </span>
+        </div>
+      )}
+      {product.isMadeToOrder && (
+        <div className="absolute top-2 left-2 z-10">
+          <span className="bg-blue-500 text-secondary px-2 py-1 rounded text-xs font-bold">
+            Por pedido
+          </span>
+        </div>
+      )}
+
       <Link to={`/producto/${product.slug}`}>
-        <div className="aspect-square bg-neutral-800 overflow-hidden">
+        <div className="aspect-square bg-neutral-800 overflow-hidden relative">
           <img
             src={product.image}
             alt={product.name}
@@ -47,9 +92,22 @@ export function ProductCard({ product }: ProductCardProps) {
           {product.description}
         </p>
         <div className="flex items-center justify-between">
-          <span className="font-display text-xl text-accent">
-            ${product.price.toLocaleString('es-AR')}
-          </span>
+          <div className="flex flex-col">
+            {hasDiscount ? (
+              <>
+                <span className="text-xs text-neutral-500 line-through">
+                  ${product.price.toLocaleString('es-AR')}
+                </span>
+                <span className="font-display text-xl text-accent">
+                  ${finalPrice.toLocaleString('es-AR')}
+                </span>
+              </>
+            ) : (
+              <span className="font-display text-xl text-accent">
+                ${product.price.toLocaleString('es-AR')}
+              </span>
+            )}
+          </div>
           <button
             onClick={handleAddToCart}
             className="px-4 py-2 bg-accent text-secondary font-medium rounded hover:bg-accent/90 transition-colors text-sm"

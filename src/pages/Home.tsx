@@ -4,10 +4,10 @@ import { ProductCard } from '../components/ProductCard';
 import { ModalQuoteForm } from '../components/ModalQuoteForm';
 import { ServiceDetailModal } from '../components/ServiceDetailModal';
 import { openWhatsApp } from '../utils/whatsapp';
-import { useProducts, useEvents, useFAQs } from '../hooks/useData';
+import { useProducts, useEvents, useFAQs } from '../hooks/useSupabaseData';
 
 export function Home() {
-  const products = useProducts();
+  const { products } = useProducts();
   const events = useEvents();
   const faqs = useFAQs();
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
