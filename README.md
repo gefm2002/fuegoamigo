@@ -796,7 +796,32 @@ npm run build
 **Deploy en Netlify:**
 
 1. Conectar repositorio a Netlify
-2. Configurar variables de entorno en Netlify Dashboard
+2. **Configurar variables de entorno en Netlify Dashboard:**
+
+   **⚠️ IMPORTANTE:** Las variables con prefijo `VITE_` son necesarias para el frontend durante el build.
+
+   **Variables para Frontend (Build Time):**
+   - `VITE_SUPABASE_URL` = `https://tu-proyecto.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` = `tu_anon_key_aqui`
+
+   **Variables para Netlify Functions:**
+   - `SUPABASE_URL` = `https://tu-proyecto.supabase.co`
+   - `SUPABASE_ANON_KEY` = `tu_anon_key_aqui`
+   - `SUPABASE_SERVICE_ROLE_KEY` = `tu_service_role_key_aqui`
+   - `NETLIFY_JWT_SECRET` = `generar_con_comando_abajo`
+   - `WHATSAPP_NUMBER` = `+5491141464526`
+   - `ADMIN_EMAIL` = `admin@fuegoamigo.com`
+   - `ADMIN_PASSWORD` = `password_seguro`
+
+   **Cómo configurar:**
+   1. Ir a **Site settings** → **Environment variables**
+   2. Agregar cada variable una por una
+   3. **Asegurarse de que `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` estén configuradas**
+   4. Guardar cambios
+   5. Hacer un nuevo deploy (o esperar al siguiente push)
+
+   **📖 Ver guía detallada:** [NETLIFY_SETUP.md](./NETLIFY_SETUP.md)
+
 3. Netlify detecta automáticamente `netlify.toml`
 4. Deploy automático en cada push a `main`
 
