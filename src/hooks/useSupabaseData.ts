@@ -76,14 +76,7 @@ export function useProducts(): { products: Product[]; loading: boolean } {
         setProducts(mapped);
       } catch (error) {
         console.error('Error fetching products:', error);
-        // Fallback a datos locales si falla
-        try {
-          const localData = await import('../data/products.json');
-          setProducts(localData.default as Product[]);
-        } catch (fallbackError) {
-          console.error('Error loading fallback data:', fallbackError);
-          setProducts([]);
-        }
+        setProducts([]);
       } finally {
         setLoading(false);
       }
@@ -101,13 +94,34 @@ export function useEvents(): Event[] {
   useEffect(() => {
     async function fetchEvents() {
       try {
-        const response = await fetch(apiUrl('public-events'));
-        const data = await response.json();
+        const isDev = import.meta.env.DEV;
+        let data: any[] = [];
+
+        if (isDev) {
+          const { data: eventsData, error } = await supabasePublic
+            .from('fuegoamigo_events')
+            .select('*')
+            .eq('is_active', true)
+            .order('created_at', { ascending: false });
+
+          if (error) {
+            console.error('Error fetching events from Supabase:', error);
+            throw error;
+          }
+          data = eventsData || [];
+        } else {
+          const response = await fetch(apiUrl('public-events'));
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error fetching events from API:', errorText);
+            throw new Error('Failed to fetch events');
+          }
+          data = await response.json();
+        }
+
         const mappedPromises = data.map(async (e: any) => {
-          const imageUrls = await Promise.all(
-            (e.images || []).map((img: string) => getImageUrl(img))
-          );
-          
+          const imageUrls = await Promise.all((e.images || []).map((img: string) => getImageUrl(img)));
+
           return {
             id: e.id,
             title: e.title,
@@ -117,16 +131,14 @@ export function useEvents(): Event[] {
             highlightMenu: e.highlight_menu || '',
             description: e.description || '',
             images: imageUrls.length > 0 ? imageUrls : ['/images/gallery-bbq-01.jpg'],
-            isActive: e.is_active,
+            isActive: e.is_active !== false,
           };
         });
-        
-        const mapped = await Promise.all(mappedPromises);
-        setEvents(mapped);
+
+        setEvents(await Promise.all(mappedPromises));
       } catch (error) {
         console.error('Error fetching events:', error);
-        const localData = await import('../data/events.json');
-        setEvents(localData.default as Event[]);
+        setEvents([]);
       } finally {
         setLoading(false);
       }
@@ -144,8 +156,31 @@ export function usePromos(): Promo[] {
   useEffect(() => {
     async function fetchPromos() {
       try {
-        const response = await fetch(apiUrl('public-promos'));
-        const data = await response.json();
+        const isDev = import.meta.env.DEV;
+        let data: any[] = [];
+
+        if (isDev) {
+          const { data: promosData, error } = await supabasePublic
+            .from('fuegoamigo_promos')
+            .select('*')
+            .eq('is_active', true)
+            .order('created_at', { ascending: false });
+
+          if (error) {
+            console.error('Error fetching promos from Supabase:', error);
+            throw error;
+          }
+          data = promosData || [];
+        } else {
+          const response = await fetch(apiUrl('public-promos'));
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error fetching promos from API:', errorText);
+            throw new Error('Failed to fetch promos');
+          }
+          data = await response.json();
+        }
+
         const mapped = data.map((p: any) => ({
           id: p.id,
           banco: p.banco,
@@ -158,8 +193,7 @@ export function usePromos(): Promo[] {
         setPromos(mapped);
       } catch (error) {
         console.error('Error fetching promos:', error);
-        const localData = await import('../data/promos.json');
-        setPromos(localData.default as Promo[]);
+        setPromos([]);
       } finally {
         setLoading(false);
       }
@@ -177,8 +211,31 @@ export function useFAQs(): FAQ[] {
   useEffect(() => {
     async function fetchFAQs() {
       try {
-        const response = await fetch(apiUrl('public-faqs'));
-        const data = await response.json();
+        const isDev = import.meta.env.DEV;
+        let data: any[] = [];
+
+        if (isDev) {
+          const { data: faqsData, error } = await supabasePublic
+            .from('fuegoamigo_faqs')
+            .select('*')
+            .eq('is_active', true)
+            .order('order', { ascending: true });
+
+          if (error) {
+            console.error('Error fetching FAQs from Supabase:', error);
+            throw error;
+          }
+          data = faqsData || [];
+        } else {
+          const response = await fetch(apiUrl('public-faqs'));
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error fetching FAQs from API:', errorText);
+            throw new Error('Failed to fetch FAQs');
+          }
+          data = await response.json();
+        }
+
         const mapped = data.map((f: any) => ({
           id: f.id,
           question: f.question,
@@ -187,8 +244,7 @@ export function useFAQs(): FAQ[] {
         setFaqs(mapped);
       } catch (error) {
         console.error('Error fetching FAQs:', error);
-        const localData = await import('../data/faqs.json');
-        setFaqs(localData.default as FAQ[]);
+        setFaqs([]);
       } finally {
         setLoading(false);
       }
