@@ -5,6 +5,7 @@ import { apiUrl, apiFetch } from '../lib/api';
 import { slugify } from '../utils/slugify';
 import { supabasePublic } from '../lib/supabasePublic';
 import { getImageUrl } from '../lib/imageUrl';
+import { compressImageToWebp } from '../lib/imageCompress';
 import { WHATSAPP_NUMBER } from '../utils/whatsapp';
 import { buildWhatsAppLink } from '../utils/cartWhatsApp';
 import { getDashboardStatsDev } from '../lib/dashboardDev';
@@ -800,11 +801,11 @@ function ProductsSection({
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
   const validateImageFile = (file: File): { valid: boolean; error?: string } => {
-    const maxSize = 1572864; // 1.5MB
+    const maxSize = 12582912; // 12MB
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
     if (file.size > maxSize) {
-      return { valid: false, error: 'El archivo excede el tamaño máximo de 1.5MB' };
+      return { valid: false, error: 'El archivo excede el tamaño máximo de 12MB' };
     }
 
     if (!allowedTypes.includes(file.type)) {
@@ -832,7 +833,11 @@ function ProductsSection({
     setUploadingImage(true);
     try {
       const entityId = editingProduct?.id || 'temp-' + Date.now();
-      const filename = file.name;
+      const shouldCompress = file.size > 1572864; // 1.5MB
+      const payload = shouldCompress
+        ? await compressImageToWebp(file, { maxWidth: 1600, maxHeight: 1600, targetBytes: 1400000 })
+        : { blob: file, contentType: file.type, filename: file.name };
+      const filename = payload.filename;
 
       // Obtener signed URL
       const signResponse = await apiFetch<{ signedUrl: string; path: string }>('admin-assets-sign-upload', {
@@ -841,16 +846,16 @@ function ProductsSection({
         body: JSON.stringify({
           entityId,
           filename,
-          contentType: file.type,
+          contentType: payload.contentType,
         }),
       });
 
       // Subir imagen a Supabase Storage
       const uploadResponse = await fetch(signResponse.signedUrl, {
         method: 'PUT',
-        body: file,
+        body: payload.blob,
         headers: {
-          'Content-Type': file.type,
+          'Content-Type': payload.contentType,
         },
       });
 
@@ -863,7 +868,7 @@ function ProductsSection({
       setFormData({ ...formData, images: newImages });
 
       // Cargar preview
-      const previewUrl = URL.createObjectURL(file);
+      const previewUrl = URL.createObjectURL(payload.blob);
       setImagePreviews([...imagePreviews, previewUrl]);
 
       alert('Imagen subida exitosamente');
@@ -1482,11 +1487,11 @@ function ServicesSection({
   const [imagePreview, setImagePreview] = useState<string>('');
 
   const validateImageFile = (file: File): { valid: boolean; error?: string } => {
-    const maxSize = 1572864; // 1.5MB
+    const maxSize = 12582912; // 12MB
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
     if (file.size > maxSize) {
-      return { valid: false, error: 'El archivo excede el tamaño máximo de 1.5MB' };
+      return { valid: false, error: 'El archivo excede el tamaño máximo de 12MB' };
     }
 
     if (!allowedTypes.includes(file.type)) {
@@ -1544,7 +1549,11 @@ function ServicesSection({
     setUploadingImage(true);
     try {
       const entityId = getEntityId();
-      const filename = file.name;
+      const shouldCompress = file.size > 1572864; // 1.5MB
+      const payload = shouldCompress
+        ? await compressImageToWebp(file, { maxWidth: 1920, maxHeight: 1080, targetBytes: 1400000 })
+        : { blob: file, contentType: file.type, filename: file.name };
+      const filename = payload.filename;
 
       const signResponse = await apiFetch<{ signedUrl: string; path: string }>('admin-assets-sign-upload', {
         method: 'POST',
@@ -1552,15 +1561,15 @@ function ServicesSection({
         body: JSON.stringify({
           entityId,
           filename,
-          contentType: file.type,
+          contentType: payload.contentType,
         }),
       });
 
       const uploadResponse = await fetch(signResponse.signedUrl, {
         method: 'PUT',
-        body: file,
+        body: payload.blob,
         headers: {
-          'Content-Type': file.type,
+          'Content-Type': payload.contentType,
         },
       });
 
@@ -1569,7 +1578,7 @@ function ServicesSection({
       }
 
       setFormData((prev: any) => ({ ...prev, image: signResponse.path }));
-      setImagePreview(URL.createObjectURL(file));
+      setImagePreview(URL.createObjectURL(payload.blob));
       alert('Imagen subida exitosamente');
     } catch (error: any) {
       console.error('Error uploading image:', error);
@@ -2640,9 +2649,9 @@ function ConfigSection({
   }, [config]);
 
   const validateImageFile = (file: File): { valid: boolean; error?: string } => {
-    const maxSize = 1572864; // 1.5MB
+    const maxSize = 12582912; // 12MB
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (file.size > maxSize) return { valid: false, error: 'El archivo excede el tamaño máximo de 1.5MB' };
+    if (file.size > maxSize) return { valid: false, error: 'El archivo excede el tamaño máximo de 12MB' };
     if (!allowedTypes.includes(file.type)) return { valid: false, error: 'Tipo de archivo no permitido. Solo JPEG, PNG y WebP' };
     return { valid: true };
   };
@@ -2660,29 +2669,34 @@ function ConfigSection({
     setUploadingHero(kind);
     try {
       const entityId = `site-config-${config?.id || 'default'}`;
+      const shouldCompress = file.size > 1572864; // 1.5MB
+      const payload = shouldCompress
+        ? await compressImageToWebp(file, { maxWidth: 2400, maxHeight: 1350, targetBytes: 1400000 })
+        : { blob: file, contentType: file.type, filename: file.name };
+
       const signResponse = await apiFetch<{ signedUrl: string; path: string }>('admin-assets-sign-upload', {
         method: 'POST',
         token,
         body: JSON.stringify({
           entityId,
-          filename: file.name,
-          contentType: file.type,
+          filename: payload.filename,
+          contentType: payload.contentType,
         }),
       });
 
       const uploadResponse = await fetch(signResponse.signedUrl, {
         method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
+        body: payload.blob,
+        headers: { 'Content-Type': payload.contentType },
       });
       if (!uploadResponse.ok) throw new Error('Error al subir la imagen');
 
       if (kind === 'home') {
         setFormData((prev: any) => ({ ...prev, home_hero_image: signResponse.path }));
-        setHomeHeroPreview(URL.createObjectURL(file));
+        setHomeHeroPreview(URL.createObjectURL(payload.blob));
       } else {
         setFormData((prev: any) => ({ ...prev, events_hero_image: signResponse.path }));
-        setEventsHeroPreview(URL.createObjectURL(file));
+        setEventsHeroPreview(URL.createObjectURL(payload.blob));
       }
       alert('Imagen subida exitosamente');
     } catch (error: any) {
