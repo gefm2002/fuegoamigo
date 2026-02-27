@@ -113,6 +113,10 @@ export function usePublicConfig(): { config: SiteConfig | null; loading: boolean
           data = cfg;
         } else {
           const res = await fetch(apiUrl('public-config'));
+          if (!res.ok) {
+            setConfig(null);
+            return;
+          }
           data = await res.json().catch(() => null);
         }
 
@@ -121,8 +125,12 @@ export function usePublicConfig(): { config: SiteConfig | null; loading: boolean
           return;
         }
 
-        const homeHeroImage = data.home_hero_image ? await getImageUrl(data.home_hero_image) : '';
-        const eventsHeroImage = data.events_hero_image ? await getImageUrl(data.events_hero_image) : '';
+        const homeHeroImage =
+          data.home_hero_image_url ||
+          (data.home_hero_image ? await getImageUrl(data.home_hero_image) : '');
+        const eventsHeroImage =
+          data.events_hero_image_url ||
+          (data.events_hero_image ? await getImageUrl(data.events_hero_image) : '');
 
         setConfig({
           id: data.id || '',
