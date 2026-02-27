@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Product, Event, Promo, FAQ, Category, SiteConfig, Order, OrderNote, Service } from '../types';
+import type { Product, Event, FAQ, Category, SiteConfig, Order, OrderNote, Service } from '../types';
 import { apiUrl, apiFetch } from '../lib/api';
 import { slugify } from '../utils/slugify';
 import { supabasePublic } from '../lib/supabasePublic';
@@ -9,7 +9,7 @@ import { WHATSAPP_NUMBER } from '../utils/whatsapp';
 import { buildWhatsAppLink } from '../utils/cartWhatsApp';
 import { getDashboardStatsDev } from '../lib/dashboardDev';
 
-type AdminSection = 'dashboard' | 'products' | 'categories' | 'services' | 'events' | 'promos' | 'faqs' | 'orders' | 'config';
+type AdminSection = 'dashboard' | 'products' | 'categories' | 'services' | 'events' | 'faqs' | 'orders' | 'config';
 
 function mapOrderFromApi(order: any): Order {
   return {
@@ -58,7 +58,6 @@ export function Admin() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
-  const [promos, setPromos] = useState<Promo[]>([]);
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -71,7 +70,6 @@ export function Admin() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
-  const [editingPromo, setEditingPromo] = useState<Promo | null>(null);
   const [editingFAQ, setEditingFAQ] = useState<FAQ | null>(null);
   const [newNote, setNewNote] = useState('');
 
@@ -222,21 +220,6 @@ export function Admin() {
         }));
         setEvents(mappedEvents);
 
-        // Promos
-        const { data: promosData } = await supabasePublic
-          .from('fuegoamigo_promos')
-          .select('*')
-          .order('created_at', { ascending: false });
-        setPromos((promosData || []).map((p: any) => ({
-          id: p.id,
-          banco: p.banco,
-          dia: p.dia,
-          topeReintegro: parseFloat(p.tope_reintegro || '0'),
-          porcentaje: p.porcentaje || 0,
-          medios: p.medios || [],
-          vigencia: p.vigencia || '',
-        })));
-
         // FAQs
         const { data: faqsData } = await supabasePublic
           .from('fuegoamigo_faqs')
@@ -249,12 +232,11 @@ export function Admin() {
         })));
       } else {
         // Production: use Netlify Functions
-        const [productsRes, categoriesRes, servicesRes, eventsRes, promosRes, faqsRes] = await Promise.all([
+        const [productsRes, categoriesRes, servicesRes, eventsRes, faqsRes] = await Promise.all([
           fetch(apiUrl('public-catalog')),
           fetch(apiUrl('public-categories')),
           fetch(apiUrl('public-services')),
           fetch(apiUrl('public-events')),
-          fetch(apiUrl('public-promos')),
           fetch(apiUrl('public-faqs')),
         ]);
 
@@ -335,17 +317,6 @@ export function Admin() {
           };
         }));
         setEvents(mappedEvents);
-
-        const promosData = await promosRes.json();
-        setPromos(promosData.map((p: any) => ({
-          id: p.id,
-          banco: p.banco,
-          dia: p.dia,
-          topeReintegro: parseFloat(p.tope_reintegro || '0'),
-          porcentaje: p.porcentaje || 0,
-          medios: p.medios || [],
-          vigencia: p.vigencia || '',
-        })));
 
         const faqsData = await faqsRes.json();
         setFaqs(faqsData.map((f: any) => ({
@@ -576,7 +547,6 @@ export function Admin() {
     { id: 'categories', label: 'Categorías', icon: '📁' },
     { id: 'services', label: 'Servicios', icon: '🧰' },
     { id: 'events', label: 'Eventos', icon: '🎉' },
-    { id: 'promos', label: 'Promociones', icon: '🎁' },
     { id: 'faqs', label: 'FAQs', icon: '❓' },
     { id: 'orders', label: 'Órdenes', icon: '📦' },
     { id: 'config', label: 'Configuración', icon: '⚙️' },
@@ -680,15 +650,6 @@ export function Admin() {
               events={events}
               editingEvent={editingEvent}
               setEditingEvent={setEditingEvent}
-              token={token!}
-              onReload={loadAllData}
-            />
-          )}
-          {activeSection === 'promos' && (
-            <PromosSection
-              promos={promos}
-              editingPromo={editingPromo}
-              setEditingPromo={setEditingPromo}
               token={token!}
               onReload={loadAllData}
             />
@@ -2035,238 +1996,6 @@ function EventsSection({
               >
                 Eliminar
               </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Promos Section
-function PromosSection({
-  promos,
-  editingPromo,
-  setEditingPromo,
-  token,
-  onReload,
-}: {
-  promos: Promo[];
-  editingPromo: Promo | null;
-  setEditingPromo: (p: Promo | null) => void;
-  token: string;
-  onReload: () => void;
-}) {
-  const [formData, setFormData] = useState<any>({
-    banco: '',
-    dia: '',
-    topeReintegro: '',
-    porcentaje: '',
-    medios: [],
-    vigencia: '',
-    isActive: true,
-  });
-
-  useEffect(() => {
-    if (editingPromo) {
-      setFormData({
-        id: editingPromo.id,
-        banco: editingPromo.banco,
-        dia: editingPromo.dia,
-        topeReintegro: editingPromo.topeReintegro.toString(),
-        porcentaje: editingPromo.porcentaje.toString(),
-        medios: editingPromo.medios || [],
-        vigencia: editingPromo.vigencia,
-        isActive: true,
-      });
-    } else {
-      setFormData({
-        banco: '',
-        dia: '',
-        topeReintegro: '',
-        porcentaje: '',
-        medios: [],
-        vigencia: '',
-        isActive: true,
-      });
-    }
-  }, [editingPromo]);
-
-  const handleSave = async () => {
-    try {
-      await apiFetch('admin-promos-upsert', {
-        method: editingPromo ? 'PUT' : 'POST',
-        token,
-        body: JSON.stringify({
-          ...formData,
-          topeReintegro: parseFloat(formData.topeReintegro || '0'),
-          porcentaje: parseFloat(formData.porcentaje || '0'),
-          medios: typeof formData.medios === 'string' 
-            ? formData.medios.split(',').map((m: string) => m.trim())
-            : formData.medios,
-          is_active: formData.isActive,
-        }),
-      });
-      setEditingPromo(null);
-      onReload();
-      alert('Promoción guardada exitosamente');
-    } catch (error: any) {
-      alert(`Error: ${error.message}`);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar esta promoción?')) return;
-    try {
-      await apiFetch('admin-promos-delete', {
-        method: 'DELETE',
-        token,
-        query: { id },
-      });
-      onReload();
-      alert('Promoción eliminada');
-    } catch (error: any) {
-      alert(`Error: ${error.message}`);
-    }
-  };
-
-  if (editingPromo || formData.banco) {
-    return (
-      <div>
-        <h1 className="font-display text-2xl text-secondary mb-4">
-          {editingPromo ? 'Editar Promoción' : 'Nueva Promoción'}
-        </h1>
-        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">Banco *</label>
-              <input
-                type="text"
-                value={formData.banco}
-                onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
-                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">Día *</label>
-              <input
-                type="text"
-                value={formData.dia}
-                onChange={(e) => setFormData({ ...formData, dia: e.target.value })}
-                placeholder="Ej: Jueves"
-                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-              />
-            </div>
-          </div>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">Tope Reintegro</label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.topeReintegro}
-                onChange={(e) => setFormData({ ...formData, topeReintegro: e.target.value })}
-                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">Porcentaje</label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.porcentaje}
-                onChange={(e) => setFormData({ ...formData, porcentaje: e.target.value })}
-                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Medios (separados por coma)</label>
-            <input
-              type="text"
-              value={typeof formData.medios === 'string' ? formData.medios : formData.medios.join(', ')}
-              onChange={(e) => setFormData({ ...formData, medios: e.target.value })}
-              placeholder="Ej: crédito, débito, MODO"
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">Vigencia</label>
-            <input
-              type="text"
-              value={formData.vigencia}
-              onChange={(e) => setFormData({ ...formData, vigencia: e.target.value })}
-              placeholder="Ej: Hasta 31/12/2024"
-              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
-            />
-          </div>
-          <label className="flex items-center gap-2 text-neutral-300">
-            <input
-              type="checkbox"
-              checked={formData.isActive}
-              onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-              className="rounded"
-            />
-            Activa
-          </label>
-          <div className="flex gap-4 mt-6">
-            <button
-              onClick={handleSave}
-              className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
-            >
-              Guardar
-            </button>
-            <button
-              onClick={() => setEditingPromo(null)}
-              className="px-6 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="font-display text-3xl text-secondary">Promociones</h1>
-        <button
-          onClick={() => setEditingPromo({} as Promo)}
-          className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
-        >
-          + Nueva Promoción
-        </button>
-      </div>
-      <div className="space-y-4">
-        {promos.map((promo) => (
-          <div key={promo.id} className="bg-neutral-900 border border-neutral-700 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-display text-lg text-secondary">{promo.banco} - {promo.dia}</h3>
-                <p className="text-neutral-400 text-sm">
-                  {promo.porcentaje}% reintegro, tope ${promo.topeReintegro.toLocaleString('es-AR')}
-                </p>
-                <p className="text-neutral-400 text-xs mt-1">Medios: {promo.medios.join(', ')}</p>
-                {promo.vigencia && (
-                  <p className="text-neutral-400 text-xs">Vigencia: {promo.vigencia}</p>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setEditingPromo(promo)}
-                  className="px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={() => handleDelete(promo.id)}
-                  className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
-                >
-                  Eliminar
-                </button>
-              </div>
             </div>
           </div>
         ))}

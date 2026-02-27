@@ -270,34 +270,6 @@ export function Home() {
         </div>
       </section>
 
-      {/* Medios de pago */}
-      <section className="py-16 bg-bg-soft">
-        <div className="container mx-auto px-4">
-          <h2 className="font-display text-3xl md:text-4xl text-secondary text-center mb-4">
-            Medios de Pago
-          </h2>
-          <p className="text-neutral-400 text-center mb-2">
-            Solo para compra en tienda. A coordinar por WhatsApp.
-          </p>
-          <p className="text-neutral-500 text-center text-sm mb-8">
-            Facturación a pedido.
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 max-w-4xl mx-auto">
-            {['Efectivo', 'Transferencia', 'Mercado Pago', 'MODO', 'Billeteras QR'].map((method) => (
-              <div
-                key={method}
-                className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 text-center"
-              >
-                <div className="w-12 h-12 bg-neutral-800 rounded-full mx-auto mb-3 flex items-center justify-center">
-                  <span className="text-2xl">💳</span>
-                </div>
-                <p className="text-neutral-300 text-sm font-medium">{method}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Combos */}
       <section className="py-16 bg-bg-soft">
         <div className="container mx-auto px-4">

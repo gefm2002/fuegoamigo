@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabasePublic } from '../lib/supabasePublic';
 import { apiUrl } from '../lib/api';
 import { getImageUrl } from '../lib/imageUrl';
-import type { Product, Event, Promo, FAQ, Service } from '../types';
+import type { Product, Event, FAQ, Service } from '../types';
 
 export function useProducts(): { products: Product[]; loading: boolean } {
   const [products, setProducts] = useState<Product[]>([]);
@@ -153,61 +153,6 @@ export function useEvents(): Event[] {
   }, []);
 
   return events;
-}
-
-export function usePromos(): Promo[] {
-  const [promos, setPromos] = useState<Promo[]>([]);
-  const [, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchPromos() {
-      try {
-        const isDev = import.meta.env.DEV;
-        let data: any[] = [];
-
-        if (isDev) {
-          const { data: promosData, error } = await supabasePublic
-            .from('fuegoamigo_promos')
-            .select('*')
-            .eq('is_active', true)
-            .order('created_at', { ascending: false });
-
-          if (error) {
-            console.error('Error fetching promos from Supabase:', error);
-            throw error;
-          }
-          data = promosData || [];
-        } else {
-          const response = await fetch(apiUrl('public-promos'));
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Error fetching promos from API:', errorText);
-            throw new Error('Failed to fetch promos');
-          }
-          data = await response.json();
-        }
-
-        const mapped = data.map((p: any) => ({
-          id: p.id,
-          banco: p.banco,
-          dia: p.dia,
-          topeReintegro: parseFloat(p.tope_reintegro || '0'),
-          porcentaje: p.porcentaje || 0,
-          medios: p.medios || [],
-          vigencia: p.vigencia || '',
-        }));
-        setPromos(mapped);
-      } catch (error) {
-        console.error('Error fetching promos:', error);
-        setPromos([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchPromos();
-  }, []);
-
-  return promos;
 }
 
 export function useFAQs(): FAQ[] {
