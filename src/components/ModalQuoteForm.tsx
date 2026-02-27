@@ -16,7 +16,6 @@ export function ModalQuoteForm({ isOpen, onClose, preselectedType }: ModalQuoteF
     guests: '',
     zone: '',
     serviceType: '',
-    budget: '',
     comments: '',
   });
 
@@ -38,7 +37,6 @@ export function ModalQuoteForm({ isOpen, onClose, preselectedType }: ModalQuoteF
         guests: '',
         zone: '',
         serviceType: '',
-        budget: '',
         comments: '',
       });
     }, 2000);
@@ -143,23 +141,6 @@ export function ModalQuoteForm({ isOpen, onClose, preselectedType }: ModalQuoteF
                 <option value="Foodtruck">Foodtruck</option>
                 <option value="Boxes">Boxes</option>
                 <option value="Mixto">Mixto</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">
-                Presupuesto estimado
-              </label>
-              <select
-                value={formData.budget}
-                onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
-              >
-                <option value="">Seleccionar</option>
-                <option value="Menos de $50.000">Menos de $50.000</option>
-                <option value="$50.000 - $100.000">$50.000 - $100.000</option>
-                <option value="$100.000 - $200.000">$100.000 - $200.000</option>
-                <option value="Más de $200.000">Más de $200.000</option>
               </select>
             </div>
 

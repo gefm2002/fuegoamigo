@@ -13,6 +13,7 @@ const categories = [
   'postres',
   'combos',
 ];
+const STORE_CATEGORY_SLUGS = categories.filter((c) => c !== 'Todas');
 
 export function Tienda() {
   const { products, loading } = useProducts();
@@ -25,7 +26,10 @@ export function Tienda() {
 
   // Separar productos destacados, ofertas y resto
   const { featuredProducts, offerProducts } = useMemo(() => {
-    const active = products.filter((p) => p.isActive);
+    // Evitar mezclar servicios u otras entidades: mostrar solo categorías de tienda
+    const active = products.filter(
+      (p) => p.isActive && !!p.category && STORE_CATEGORY_SLUGS.includes(p.category)
+    );
     
     const featured = active.filter((p) => p.featured);
     const offers = active.filter((p) => p.isOffer);
@@ -38,7 +42,9 @@ export function Tienda() {
 
   const filteredProducts = useMemo(() => {
     // Filtrar solo productos activos
-    let filtered = products.filter((p) => p.isActive === true);
+    let filtered = products.filter(
+      (p) => p.isActive === true && !!p.category && STORE_CATEGORY_SLUGS.includes(p.category)
+    );
 
     // Si hay búsqueda, aplicar filtros de búsqueda
     if (searchQuery) {
@@ -65,6 +71,7 @@ export function Tienda() {
 
   // Calcular precio con descuento
   const getFinalPrice = (product: any) => {
+    if (product.price === null) return null;
     let finalPrice = product.price;
     if (product.discountPercentage > 0) {
       finalPrice = finalPrice * (1 - product.discountPercentage / 100);
@@ -177,7 +184,7 @@ export function Tienda() {
                         -${(product.discountFixed ?? 0).toLocaleString('es-AR')}
                       </div>
                     )}
-                    {product.price !== finalPrice && (
+                    {finalPrice !== null && product.price !== null && product.price !== finalPrice && (
                       <div className="absolute bottom-2 left-2 bg-neutral-900/90 px-2 py-1 rounded">
                         <span className="text-xs text-neutral-400 line-through">
                           ${product.price.toLocaleString('es-AR')}

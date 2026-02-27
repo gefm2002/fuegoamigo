@@ -4,20 +4,76 @@ import { ProductCard } from '../components/ProductCard';
 import { ModalQuoteForm } from '../components/ModalQuoteForm';
 import { ServiceDetailModal } from '../components/ServiceDetailModal';
 import { openWhatsApp } from '../utils/whatsapp';
-import { useProducts, useEvents, useFAQs } from '../hooks/useSupabaseData';
+import { useProducts, useEvents, useFAQs, useServices } from '../hooks/useSupabaseData';
 
 export function Home() {
   const { products } = useProducts();
   const events = useEvents();
   const faqs = useFAQs();
+  const services = useServices();
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isServiceDetailOpen, setIsServiceDetailOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<{ title: string; description: string } | null>(null);
   const [selectedEventType, setSelectedEventType] = useState('Social');
 
-  const featuredProducts = products.filter((p) => p.featured).slice(0, 6);
-  const combos = products.filter((p) => p.category === 'combos').slice(0, 3);
+  // Evitar mezclar servicios u otras entidades: mostrar solo categorías de tienda
+  const storeCategorySlugs = [
+    'boxes-y-regalos',
+    'picadas-y-tablas',
+    'ahumados',
+    'salsas-y-aderezos',
+    'sandwiches-y-burgers',
+    'finger-food',
+    'postres',
+    'combos',
+  ];
+  const storeProducts = products.filter((p) => p.isActive && storeCategorySlugs.includes(p.category));
+
+  const featuredProducts = storeProducts.filter((p) => p.featured).slice(0, 6);
+  const combos = storeProducts.filter((p) => p.category === 'combos').slice(0, 3);
   const recentEvents = events.slice(0, 8);
+  const servicesToShow =
+    services.length > 0
+      ? services
+          .filter((s) => s.isActive)
+          .sort((a, b) => a.order - b.order)
+          .map((s) => ({
+            title: s.title,
+            description: s.shortDescription,
+            image: s.image || '/images/gallery-bbq-01.jpg',
+          }))
+      : [
+          {
+            title: 'Catering Social',
+            description: 'Eventos sociales, cumples, reuniones. Menús personalizados.',
+            image: '/images/catering-social.jpg',
+          },
+          {
+            title: 'Catering Corporativo',
+            description: 'Lunchs, eventos corporativos, lanzamientos. Servicio completo.',
+            image: '/images/catering-corporativo.jpg',
+          },
+          {
+            title: 'Producciones',
+            description: 'Moda, publicidad, sets. Boxes y servicio en locación.',
+            image: '/images/catering-produccion.jpg',
+          },
+          {
+            title: 'Foodtruck para Eventos',
+            description: 'Foodtruck para ferias, eventos al aire libre y reuniones grandes.',
+            image: '/images/hero-foodtruck.jpg',
+          },
+          {
+            title: 'Boxes y Picadas',
+            description: 'Boxes a pedido, picadas premium. Retiro o envío.',
+            image: '/images/product-picada-01.jpg',
+          },
+          {
+            title: 'Ahumados y Parrilla',
+            description: 'Ahumados en vivo, parrilla premium. Servicio completo.',
+            image: '/images/gallery-bbq-01.jpg',
+          },
+        ];
 
   return (
     <div>
@@ -65,38 +121,7 @@ export function Home() {
             Servicios
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                title: 'Catering Social',
-                description: 'Eventos sociales, cumples, reuniones. Menús personalizados.',
-                image: '/images/catering-social.jpg',
-              },
-              {
-                title: 'Catering Corporativo',
-                description: 'Lunchs, eventos corporativos, lanzamientos. Servicio completo.',
-                image: '/images/catering-corporativo.jpg',
-              },
-              {
-                title: 'Producciones',
-                description: 'Moda, publicidad, sets. Boxes y servicio en locación.',
-                image: '/images/catering-produccion.jpg',
-              },
-              {
-                title: 'Foodtruck para Eventos',
-                description: 'Foodtruck para ferias, eventos al aire libre y reuniones grandes.',
-                image: '/images/hero-foodtruck.jpg',
-              },
-              {
-                title: 'Boxes y Picadas',
-                description: 'Boxes a pedido, picadas premium. Retiro o envío.',
-                image: '/images/product-picada-01.jpg',
-              },
-              {
-                title: 'Ahumados y Parrilla',
-                description: 'Ahumados en vivo, parrilla premium. Servicio completo.',
-                image: '/images/gallery-bbq-01.jpg',
-              },
-            ].map((service, idx) => (
+            {servicesToShow.map((service, idx) => (
               <div
                 key={idx}
                 className="bg-neutral-900 border border-neutral-700 rounded-lg overflow-hidden hover:border-accent transition-colors"

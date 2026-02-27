@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Product, Event, Promo, FAQ, Category, SiteConfig, Order, OrderNote } from '../types';
+import type { Product, Event, Promo, FAQ, Category, SiteConfig, Order, OrderNote, Service } from '../types';
 import { apiUrl, apiFetch } from '../lib/api';
 import { slugify } from '../utils/slugify';
 import { supabasePublic } from '../lib/supabasePublic';
@@ -9,7 +9,38 @@ import { WHATSAPP_NUMBER } from '../utils/whatsapp';
 import { buildWhatsAppLink } from '../utils/cartWhatsApp';
 import { getDashboardStatsDev } from '../lib/dashboardDev';
 
-type AdminSection = 'dashboard' | 'products' | 'categories' | 'events' | 'promos' | 'faqs' | 'orders' | 'config';
+type AdminSection = 'dashboard' | 'products' | 'categories' | 'services' | 'events' | 'promos' | 'faqs' | 'orders' | 'config';
+
+function mapOrderFromApi(order: any): Order {
+  return {
+    id: order.id,
+    orderNumber: order.order_number ?? order.orderNumber ?? 0,
+    customerName: order.customer_name ?? order.customerName ?? '',
+    customerEmail: order.customer_email ?? order.customerEmail ?? undefined,
+    customerPhone: order.customer_phone ?? order.customerPhone ?? '',
+    deliveryType: order.delivery_type ?? order.deliveryType ?? 'retiro',
+    zone: order.zone ?? undefined,
+    paymentMethod: order.payment_method ?? order.paymentMethod ?? '',
+    items: order.items || [],
+    subtotal: Number(order.subtotal ?? 0),
+    total: Number(order.total ?? 0),
+    notes: typeof order.notes === 'string' ? order.notes : undefined,
+    whatsappMessage: order.whatsapp_message ?? order.whatsappMessage ?? undefined,
+    status: order.status,
+    createdAt: order.created_at ?? order.createdAt ?? '',
+    updatedAt: order.updated_at ?? order.updatedAt ?? '',
+  };
+}
+
+function mapOrderNoteFromApi(note: any): OrderNote {
+  return {
+    id: note.id,
+    orderId: note.order_id ?? note.orderId ?? '',
+    note: note.note ?? '',
+    createdBy: note.created_by ?? note.createdBy ?? undefined,
+    createdAt: note.created_at ?? note.createdAt ?? '',
+  };
+}
 
 export function Admin() {
   const navigate = useNavigate();
@@ -25,6 +56,7 @@ export function Admin() {
   // Data states
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [promos, setPromos] = useState<Promo[]>([]);
   const [faqs, setFaqs] = useState<FAQ[]>([]);
@@ -37,6 +69,7 @@ export function Admin() {
   // Edit states
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingService, setEditingService] = useState<Service | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [editingPromo, setEditingPromo] = useState<Promo | null>(null);
   const [editingFAQ, setEditingFAQ] = useState<FAQ | null>(null);
@@ -103,12 +136,18 @@ export function Admin() {
         const mappedProducts = await Promise.all((productsData || []).map(async (p: any) => {
           const imagePath = p.images?.[0] || '/images/product-box-01.jpg';
           const imageUrl = await getImageUrl(imagePath);
+          const priceRaw = p.price;
+          const parsedPrice =
+            priceRaw === null || priceRaw === undefined || priceRaw === ''
+              ? null
+              : Number(priceRaw);
+          const price = Number.isFinite(parsedPrice) ? parsedPrice : null;
           return {
             id: p.id,
             slug: p.slug,
             name: p.name,
             description: p.description || '',
-            price: parseFloat(p.price),
+            price,
             category: p.fuegoamigo_categories?.slug || '',
             image: imageUrl,
             tags: p.tags || [],
@@ -136,6 +175,22 @@ export function Admin() {
           image: c.image,
           isActive: c.is_active !== false,
           order: c.order || 0,
+        })));
+
+        // Services
+        const { data: servicesData } = await supabasePublic
+          .from('fuegoamigo_services')
+          .select('*')
+          .order('order', { ascending: true });
+        setServices((servicesData || []).map((s: any) => ({
+          id: s.id,
+          slug: s.slug || '',
+          title: s.title,
+          shortDescription: s.short_description || '',
+          longDescription: s.long_description || '',
+          image: s.image || '',
+          isActive: s.is_active !== false,
+          order: s.order || 0,
         })));
 
         // Events
@@ -194,9 +249,10 @@ export function Admin() {
         })));
       } else {
         // Production: use Netlify Functions
-        const [productsRes, categoriesRes, eventsRes, promosRes, faqsRes] = await Promise.all([
+        const [productsRes, categoriesRes, servicesRes, eventsRes, promosRes, faqsRes] = await Promise.all([
           fetch(apiUrl('public-catalog')),
           fetch(apiUrl('public-categories')),
+          fetch(apiUrl('public-services')),
           fetch(apiUrl('public-events')),
           fetch(apiUrl('public-promos')),
           fetch(apiUrl('public-faqs')),
@@ -206,12 +262,18 @@ export function Admin() {
         const mappedProducts = await Promise.all(productsData.map(async (p: any) => {
           const imagePath = p.images?.[0] || '/images/product-box-01.jpg';
           const imageUrl = await getImageUrl(imagePath);
+          const priceRaw = p.price;
+          const parsedPrice =
+            priceRaw === null || priceRaw === undefined || priceRaw === ''
+              ? null
+              : Number(priceRaw);
+          const price = Number.isFinite(parsedPrice) ? parsedPrice : null;
           return {
             id: p.id,
             slug: p.slug,
             name: p.name,
             description: p.description || '',
-            price: parseFloat(p.price),
+            price,
             category: p.fuegoamigo_categories?.slug || '',
             image: imageUrl,
             tags: p.tags || [],
@@ -235,6 +297,18 @@ export function Admin() {
           image: c.image,
           isActive: c.is_active !== false,
           order: c.order || 0,
+        })));
+
+        const servicesData = await servicesRes.json();
+        setServices((servicesData || []).map((s: any) => ({
+          id: s.id,
+          slug: s.slug || '',
+          title: s.title,
+          shortDescription: s.short_description || '',
+          longDescription: s.long_description || '',
+          image: s.image || '',
+          isActive: s.is_active !== false,
+          order: s.order || 0,
         })));
 
         const eventsData = await eventsRes.json();
@@ -334,7 +408,7 @@ export function Admin() {
           method: 'GET',
           token: token!,
         });
-        setOrders(ordersData || []);
+        setOrders((ordersData || []).map(mapOrderFromApi));
       } catch (netlifyError) {
         // Si falla y estamos en desarrollo, intentar con Supabase directo usando service_role
         if (import.meta.env.DEV) {
@@ -361,8 +435,9 @@ export function Admin() {
           token: token!,
           query: { id: orderId },
         });
-        setSelectedOrder(order);
-        setOrderNotes(Array.isArray(order.notes) ? order.notes : []);
+        setSelectedOrder(mapOrderFromApi(order));
+        const notesRaw = Array.isArray((order as any).notes) ? (order as any).notes : [];
+        setOrderNotes(notesRaw.map(mapOrderNoteFromApi));
       } catch (netlifyError) {
         // Si falla y estamos en desarrollo, usar Supabase directo
         if (import.meta.env.DEV) {
@@ -499,6 +574,7 @@ export function Admin() {
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'products', label: 'Productos', icon: '🛍️' },
     { id: 'categories', label: 'Categorías', icon: '📁' },
+    { id: 'services', label: 'Servicios', icon: '🧰' },
     { id: 'events', label: 'Eventos', icon: '🎉' },
     { id: 'promos', label: 'Promociones', icon: '🎁' },
     { id: 'faqs', label: 'FAQs', icon: '❓' },
@@ -586,6 +662,15 @@ export function Admin() {
               categories={categories}
               editingCategory={editingCategory}
               setEditingCategory={setEditingCategory}
+              token={token!}
+              onReload={loadAllData}
+            />
+          )}
+          {activeSection === 'services' && (
+            <ServicesSection
+              services={services}
+              editingService={editingService}
+              setEditingService={setEditingService}
               token={token!}
               onReload={loadAllData}
             />
@@ -721,6 +806,7 @@ function ProductsSection({
     name: '',
     description: '',
     price: '',
+    isQuote: false,
     category_id: '',
     stock: '',
     discountFixed: '',
@@ -848,7 +934,8 @@ function ProductsSection({
             id: editingProduct.id,
             name: editingProduct.name,
             description: editingProduct.description,
-            price: editingProduct.price.toString(),
+            price: editingProduct.price?.toString?.() ?? '',
+            isQuote: editingProduct.price === null,
             category_id: categories.find(c => c.slug === editingProduct.category)?.id || '',
             stock: editingProduct.stock.toString(),
             discountFixed: (editingProduct.discountFixed || 0).toString(),
@@ -880,7 +967,8 @@ function ProductsSection({
             id: editingProduct.id,
             name: editingProduct.name,
             description: editingProduct.description,
-            price: editingProduct.price.toString(),
+            price: editingProduct.price?.toString?.() ?? '',
+            isQuote: editingProduct.price === null,
             category_id: categories.find(c => c.slug === editingProduct.category)?.id || '',
             stock: editingProduct.stock.toString(),
             discountFixed: (editingProduct.discountFixed || 0).toString(),
@@ -899,6 +987,7 @@ function ProductsSection({
           name: '',
           description: '',
           price: '',
+          isQuote: false,
           category_id: '',
           stock: '',
           discountFixed: '',
@@ -919,13 +1008,22 @@ function ProductsSection({
 
   const handleSave = async () => {
     try {
+      const parsed =
+        formData.isQuote || formData.price === '' ? null : Number(formData.price);
+      const price =
+        formData.isQuote || formData.price === ''
+          ? null
+          : Number.isFinite(parsed)
+            ? parsed
+            : null;
+
       await apiFetch('admin-products-upsert', {
         method: editingProduct ? 'PUT' : 'POST',
         token,
         body: JSON.stringify({
           ...formData,
           slug: slugify(formData.name),
-          price: parseFloat(formData.price),
+          price,
           stock: parseInt(formData.stock || '0'),
           discount_fixed: parseFloat(formData.discountFixed || '0'),
           discount_percentage: parseFloat(formData.discountPercentage || '0'),
@@ -984,14 +1082,37 @@ function ProductsSection({
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">Precio *</label>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <label className="block text-sm font-medium text-neutral-300">Precio</label>
+                <label className="flex items-center gap-2 text-neutral-300 text-sm select-none">
+                  <input
+                    type="checkbox"
+                    checked={formData.isQuote}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        isQuote: e.target.checked,
+                        price: e.target.checked ? '' : formData.price,
+                      })
+                    }
+                    className="rounded"
+                  />
+                  A cotizar (sin precio)
+                </label>
+              </div>
               <input
                 type="number"
                 step="0.01"
                 value={formData.price}
                 onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                disabled={formData.isQuote}
                 className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
               />
+              {formData.isQuote && (
+                <p className="text-xs text-neutral-500 mt-2">
+                  Este producto se mostrará como <span className="text-accent font-medium">A Cotizar</span>.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-neutral-300 mb-2">Categoría</label>
@@ -1157,7 +1278,11 @@ function ProductsSection({
               <img src={product.image} alt={product.name} className="w-full h-32 object-cover rounded mb-2" />
             )}
             <h3 className="font-display text-lg text-secondary mb-2">{product.name}</h3>
-            <p className="text-neutral-400 text-sm mb-2">${product.price.toLocaleString('es-AR')}</p>
+            {product.price === null ? (
+              <p className="text-accent font-display text-sm mb-2">A Cotizar</p>
+            ) : (
+              <p className="text-neutral-400 text-sm mb-2">${product.price.toLocaleString('es-AR')}</p>
+            )}
             <div className="flex gap-2 mt-4">
               <button
                 onClick={() => setEditingProduct(product)}
@@ -1348,6 +1473,236 @@ function CategoriesSection({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Services Section
+function ServicesSection({
+  services,
+  editingService,
+  setEditingService,
+  token,
+  onReload,
+}: {
+  services: Service[];
+  editingService: Service | null;
+  setEditingService: (s: Service | null) => void;
+  token: string;
+  onReload: () => void;
+}) {
+  const [formData, setFormData] = useState<any>({
+    title: '',
+    slug: '',
+    short_description: '',
+    long_description: '',
+    image: '',
+    is_active: true,
+    order: 0,
+  });
+
+  useEffect(() => {
+    if (editingService) {
+      setFormData({
+        id: editingService.id,
+        title: editingService.title || '',
+        slug: editingService.slug || '',
+        short_description: editingService.shortDescription || '',
+        long_description: editingService.longDescription || '',
+        image: editingService.image || '',
+        is_active: editingService.isActive,
+        order: editingService.order || 0,
+      });
+    } else {
+      setFormData({
+        title: '',
+        slug: '',
+        short_description: '',
+        long_description: '',
+        image: '',
+        is_active: true,
+        order: 0,
+      });
+    }
+  }, [editingService]);
+
+  const handleSave = async () => {
+    try {
+      await apiFetch('admin-services-upsert', {
+        method: editingService ? 'PUT' : 'POST',
+        token,
+        body: JSON.stringify({
+          ...formData,
+          slug: formData.slug || slugify(formData.title),
+          order: Number(formData.order || 0),
+        }),
+      });
+      setEditingService(null);
+      onReload();
+      alert('Servicio guardado exitosamente');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Eliminar este servicio?')) return;
+    try {
+      await apiFetch('admin-services-delete', {
+        method: 'DELETE',
+        token,
+        query: { id },
+      });
+      onReload();
+      alert('Servicio eliminado');
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  if (editingService || formData.title) {
+    return (
+      <div>
+        <h1 className="font-display text-2xl text-secondary mb-4">
+          {editingService ? 'Editar Servicio' : 'Nuevo Servicio'}
+        </h1>
+        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Título *</label>
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Slug</label>
+              <input
+                type="text"
+                value={formData.slug}
+                onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                placeholder="Se genera solo si lo dejás vacío"
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Descripción corta *</label>
+            <textarea
+              value={formData.short_description}
+              onChange={(e) => setFormData({ ...formData, short_description: e.target.value })}
+              rows={2}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Detalle (opcional)</label>
+            <textarea
+              value={formData.long_description}
+              onChange={(e) => setFormData({ ...formData, long_description: e.target.value })}
+              rows={6}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+            />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Imagen (path o URL)</label>
+              <input
+                type="text"
+                value={formData.image}
+                onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Orden</label>
+              <input
+                type="number"
+                value={formData.order}
+                onChange={(e) => setFormData({ ...formData, order: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-neutral-300">
+              <input
+                type="checkbox"
+                checked={formData.is_active}
+                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                className="rounded"
+              />
+              Activo
+            </label>
+          </div>
+
+          <div className="flex gap-4 mt-6">
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+            >
+              Guardar
+            </button>
+            <button
+              onClick={() => setEditingService(null)}
+              className="px-6 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="font-display text-3xl text-secondary">Servicios</h1>
+        <button
+          onClick={() => setEditingService({} as Service)}
+          className="px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+        >
+          + Nuevo Servicio
+        </button>
+      </div>
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {services.map((service) => (
+          <div key={service.id} className="bg-neutral-900 border border-neutral-700 rounded-lg p-4">
+            {service.image && (
+              <img src={service.image} alt={service.title} className="w-full h-32 object-cover rounded mb-2" />
+            )}
+            <h3 className="font-display text-lg text-secondary mb-2">{service.title}</h3>
+            <p className="text-neutral-400 text-sm mb-2 line-clamp-2">{service.shortDescription}</p>
+            <p className="text-neutral-500 text-xs">Orden: {service.order}</p>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setEditingService(service)}
+                className="flex-1 px-4 py-2 bg-neutral-800 border border-neutral-700 text-secondary rounded hover:bg-neutral-700"
+              >
+                Editar
+              </button>
+              <button
+                onClick={() => handleDelete(service.id)}
+                className="flex-1 px-4 py-2 bg-accent text-secondary rounded hover:bg-accent/90"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {services.length === 0 && (
+        <p className="text-neutral-500 text-sm mt-6">
+          No hay servicios cargados (si la tabla `fuegoamigo_services` no existe aún, hay que crearla en Supabase).
+        </p>
+      )}
     </div>
   );
 }
@@ -2289,7 +2644,9 @@ function OrdersSection({
                 </span>
               </div>
               <p className="text-secondary font-medium">${order.total.toLocaleString('es-AR')}</p>
-              <p className="text-neutral-400 text-xs mt-1">{new Date(order.createdAt).toLocaleDateString('es-AR')}</p>
+              <p className="text-neutral-400 text-xs mt-1">
+                {order.createdAt ? new Date(order.createdAt).toLocaleDateString('es-AR') : '-'}
+              </p>
             </div>
           ))}
         </div>
@@ -2353,7 +2710,7 @@ function OrdersSection({
                   <div key={note.id} className="bg-neutral-800 rounded p-3">
                     <p className="text-secondary text-sm">{note.note}</p>
                     <p className="text-neutral-400 text-xs mt-1">
-                      {new Date(note.createdAt).toLocaleString('es-AR')}
+                      {note.createdAt ? new Date(note.createdAt).toLocaleString('es-AR') : '-'}
                     </p>
                   </div>
                 ))}

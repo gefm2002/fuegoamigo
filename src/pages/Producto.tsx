@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useCart } from '../cart/useCart';
 import { useCartDrawer } from '../context/CartDrawerContext';
 import { useProducts } from '../hooks/useSupabaseData';
+import { openWhatsApp } from '../utils/whatsapp';
 
 export function Producto() {
   const { products, loading } = useProducts();
@@ -40,6 +41,7 @@ export function Producto() {
   }
 
   const handleAddToCart = () => {
+    if (product.price === null) return;
     addItem({
       id: product.id,
       name: product.name,
@@ -78,9 +80,13 @@ export function Producto() {
             <h1 className="font-display text-3xl md:text-4xl text-secondary mb-4">
               {product.name}
             </h1>
-            <p className="text-2xl text-accent font-display mb-6">
-              ${product.price.toLocaleString('es-AR')}
-            </p>
+            {product.price === null ? (
+              <p className="text-2xl text-accent font-display mb-6">A Cotizar</p>
+            ) : (
+              <p className="text-2xl text-accent font-display mb-6">
+                ${product.price.toLocaleString('es-AR')}
+              </p>
+            )}
             <p className="text-neutral-400 mb-8">{product.description}</p>
 
             {product.tags.length > 0 && (
@@ -97,28 +103,30 @@ export function Producto() {
             )}
 
             <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-neutral-300 mb-2">
-                  Cantidad
-                </label>
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-10 h-10 flex items-center justify-center bg-neutral-900 border border-neutral-700 rounded text-neutral-300 hover:bg-neutral-800"
-                  >
-                    -
-                  </button>
-                  <span className="text-secondary font-medium text-lg w-12 text-center">
-                    {quantity}
-                  </span>
-                  <button
-                    onClick={() => setQuantity(quantity + 1)}
-                    className="w-10 h-10 flex items-center justify-center bg-neutral-900 border border-neutral-700 rounded text-neutral-300 hover:bg-neutral-800"
-                  >
-                    +
-                  </button>
+              {product.price !== null && (
+                <div>
+                  <label className="block text-sm font-medium text-neutral-300 mb-2">
+                    Cantidad
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      className="w-10 h-10 flex items-center justify-center bg-neutral-900 border border-neutral-700 rounded text-neutral-300 hover:bg-neutral-800"
+                    >
+                      -
+                    </button>
+                    <span className="text-secondary font-medium text-lg w-12 text-center">
+                      {quantity}
+                    </span>
+                    <button
+                      onClick={() => setQuantity(quantity + 1)}
+                      className="w-10 h-10 flex items-center justify-center bg-neutral-900 border border-neutral-700 rounded text-neutral-300 hover:bg-neutral-800"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-neutral-300 mb-2">
@@ -134,10 +142,22 @@ export function Producto() {
               </div>
 
               <button
-                onClick={handleAddToCart}
-                className="w-full py-4 bg-accent text-secondary font-medium rounded hover:bg-accent/90 transition-colors text-lg"
+                onClick={() => {
+                  if (product.price === null) {
+                    openWhatsApp(`Hola! Quiero cotizar este producto: ${product.name}`);
+                    return;
+                  }
+                  handleAddToCart();
+                }}
+                className={`w-full py-4 font-medium rounded transition-colors text-lg ${
+                  product.price === null
+                    ? 'bg-neutral-900 border border-neutral-700 text-secondary hover:bg-neutral-800'
+                    : 'bg-accent text-secondary hover:bg-accent/90'
+                }`}
               >
-                Sumar al carrito - ${(product.price * quantity).toLocaleString('es-AR')}
+                {product.price === null
+                  ? 'Cotizar por WhatsApp'
+                  : `Sumar al carrito - $${(product.price * quantity).toLocaleString('es-AR')}`}
               </button>
             </div>
           </div>

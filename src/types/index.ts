@@ -3,7 +3,7 @@ export interface Product {
   slug: string;
   name: string;
   description: string;
-  price: number;
+  price: number | null;
   category: string;
   image: string;
   tags: string[];
@@ -14,6 +14,17 @@ export interface Product {
   discountPercentage?: number;
   isOffer?: boolean;
   isMadeToOrder?: boolean;
+}
+
+export interface Service {
+  id: string;
+  slug: string;
+  title: string;
+  shortDescription: string;
+  longDescription?: string;
+  image?: string;
+  isActive: boolean;
+  order: number;
 }
 
 export interface Category {
@@ -116,7 +127,6 @@ export interface QuoteFormData {
   guests: string;
   zone: string;
   serviceType: string;
-  budget: string;
   comments: string;
 }
 

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import type { Product } from '../types';
 import { useCart } from '../cart/useCart';
 import { useCartDrawer } from '../context/CartDrawerContext';
+import { openWhatsApp } from '../utils/whatsapp';
 
 interface ProductCardProps {
   product: Product;
@@ -11,22 +12,25 @@ export function ProductCard({ product }: ProductCardProps) {
   const { addItem } = useCart();
   const { openDrawer } = useCartDrawer();
 
-  // Calcular precio final con descuentos
-  const getFinalPrice = () => {
-    let finalPrice = product.price;
+  const basePrice = product.price;
+  const hasPrice = basePrice !== null;
+
+  const finalPrice = (() => {
+    if (basePrice === null) return null;
+    let fp = basePrice;
     if (product.discountPercentage && product.discountPercentage > 0) {
-      finalPrice = finalPrice * (1 - product.discountPercentage / 100);
+      fp = fp * (1 - product.discountPercentage / 100);
     }
     if (product.discountFixed && product.discountFixed > 0) {
-      finalPrice = finalPrice - product.discountFixed;
+      fp = fp - product.discountFixed;
     }
-    return Math.max(0, finalPrice);
-  };
+    return Math.max(0, fp);
+  })();
 
-  const finalPrice = getFinalPrice();
-  const hasDiscount = finalPrice < product.price;
+  const hasDiscount = basePrice !== null && finalPrice !== null && finalPrice < basePrice;
 
   const handleAddToCart = () => {
+    if (!hasPrice || finalPrice === null) return;
     addItem({
       id: product.id,
       name: product.name,
@@ -93,10 +97,14 @@ export function ProductCard({ product }: ProductCardProps) {
         </p>
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
-            {hasDiscount ? (
+            {!hasPrice ? (
+              <span className="font-display text-xl text-accent">
+                A Cotizar
+              </span>
+            ) : hasDiscount ? (
               <>
                 <span className="text-xs text-neutral-500 line-through">
-                  ${product.price.toLocaleString('es-AR')}
+                  ${basePrice.toLocaleString('es-AR')}
                 </span>
                 <span className="font-display text-xl text-accent">
                   ${finalPrice.toLocaleString('es-AR')}
@@ -104,15 +112,25 @@ export function ProductCard({ product }: ProductCardProps) {
               </>
             ) : (
               <span className="font-display text-xl text-accent">
-                ${product.price.toLocaleString('es-AR')}
+                ${basePrice.toLocaleString('es-AR')}
               </span>
             )}
           </div>
           <button
-            onClick={handleAddToCart}
-            className="px-4 py-2 bg-accent text-secondary font-medium rounded hover:bg-accent/90 transition-colors text-sm"
+            onClick={() => {
+              if (!hasPrice) {
+                openWhatsApp(`Hola! Quiero cotizar este producto: ${product.name}`);
+                return;
+              }
+              handleAddToCart();
+            }}
+            className={`px-4 py-2 font-medium rounded transition-colors text-sm ${
+              hasPrice
+                ? 'bg-accent text-secondary hover:bg-accent/90'
+                : 'bg-neutral-800 border border-neutral-700 text-secondary hover:bg-neutral-700'
+            }`}
           >
-            Sumar
+            {hasPrice ? 'Sumar' : 'Cotizar'}
           </button>
         </div>
         {product.tags.length > 0 && (

@@ -55,7 +55,6 @@ export function formatQuoteMessage(formData: {
   guests: string;
   zone: string;
   serviceType: string;
-  budget: string;
   comments: string;
 }): string {
   let message = `🔥 *CONSULTA CATERING - FUEGO AMIGO*\n\n`;
@@ -64,7 +63,7 @@ export function formatQuoteMessage(formData: {
   message += `*Cantidad de personas:* ${formData.guests}\n`;
   message += `*Zona:* ${formData.zone}\n`;
   message += `*Estilo de servicio:* ${formData.serviceType}\n`;
-  message += `*Presupuesto estimado:* ${formData.budget}\n\n`;
+  message += `\n`;
   
   if (formData.comments) {
     message += `*Comentarios:*\n${formData.comments}\n\n`;

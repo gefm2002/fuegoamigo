@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabasePublic } from '../lib/supabasePublic';
 import { apiUrl } from '../lib/api';
 import { getImageUrl } from '../lib/imageUrl';
-import type { Product, Event, Promo, FAQ } from '../types';
+import type { Product, Event, Promo, FAQ, Service } from '../types';
 
 export function useProducts(): { products: Product[]; loading: boolean } {
   const [products, setProducts] = useState<Product[]>([]);
@@ -51,13 +51,19 @@ export function useProducts(): { products: Product[]; loading: boolean } {
         const mappedPromises = data.map(async (p: any) => {
           const imagePath = p.images?.[0] || '/images/product-box-01.jpg';
           const imageUrl = await getImageUrl(imagePath);
+          const priceRaw = p.price;
+          const parsedPrice =
+            priceRaw === null || priceRaw === undefined || priceRaw === ''
+              ? null
+              : Number(priceRaw);
+          const price = Number.isFinite(parsedPrice) ? parsedPrice : null;
           
           return {
             id: p.id,
             slug: p.slug,
             name: p.name,
             description: p.description || '',
-            price: parseFloat(p.price),
+            price,
             category: p.fuegoamigo_categories?.slug || '',
             image: imageUrl,
             tags: p.tags || [],
@@ -253,4 +259,67 @@ export function useFAQs(): FAQ[] {
   }, []);
 
   return faqs;
+}
+
+export function useServices(): Service[] {
+  const [services, setServices] = useState<Service[]>([]);
+  const [, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchServices() {
+      try {
+        const isDev = import.meta.env.DEV;
+        let data: any[] = [];
+
+        if (isDev) {
+          const { data: servicesData, error } = await supabasePublic
+            .from('fuegoamigo_services')
+            .select('*')
+            .eq('is_active', true)
+            .order('order', { ascending: true });
+
+          if (error) {
+            console.error('Error fetching services from Supabase:', error);
+            throw error;
+          }
+          data = servicesData || [];
+        } else {
+          const response = await fetch(apiUrl('public-services'));
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error fetching services from API:', errorText);
+            throw new Error('Failed to fetch services');
+          }
+          data = await response.json();
+        }
+
+        const mapped = await Promise.all(
+          (data || []).map(async (s: any) => {
+            const imageUrl = s.image ? await getImageUrl(s.image) : undefined;
+            return {
+              id: s.id,
+              slug: s.slug || '',
+              title: s.title,
+              shortDescription: s.short_description || s.shortDescription || '',
+              longDescription: s.long_description || s.longDescription || '',
+              image: imageUrl,
+              isActive: s.is_active !== false,
+              order: s.order || 0,
+            } satisfies Service;
+          })
+        );
+
+        setServices(mapped);
+      } catch (error) {
+        console.error('Error fetching services:', error);
+        setServices([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchServices();
+  }, []);
+
+  return services;
 }
