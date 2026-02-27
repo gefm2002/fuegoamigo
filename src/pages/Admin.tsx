@@ -244,7 +244,13 @@ export function Admin() {
           fetch(apiUrl('public-faqs')),
         ]);
 
-        const productsData = await productsRes.json();
+        const safeJsonArray = async (res: Response): Promise<any[]> => {
+          if (!res.ok) return [];
+          const json = await res.json().catch(() => []);
+          return Array.isArray(json) ? json : [];
+        };
+
+        const productsData = await safeJsonArray(productsRes);
         const mappedProducts = await Promise.all(productsData.map(async (p: any) => {
           const imagePath = p.images?.[0] || '/images/product-box-01.jpg';
           const imageUrl = await getImageUrl(imagePath);
@@ -274,7 +280,7 @@ export function Admin() {
         }));
         setProducts(mappedProducts);
 
-        const categoriesData = await categoriesRes.json();
+        const categoriesData = await safeJsonArray(categoriesRes);
         setCategories(categoriesData.map((c: any) => ({
           id: c.id,
           slug: c.slug,
@@ -285,8 +291,8 @@ export function Admin() {
           order: c.order || 0,
         })));
 
-        const servicesData = await servicesRes.json();
-        const mappedServices = await Promise.all((servicesData || []).map(async (s: any) => {
+        const servicesData = await safeJsonArray(servicesRes);
+        const mappedServices = await Promise.all(servicesData.map(async (s: any) => {
           const imageUrl = s.image ? await getImageUrl(s.image) : '';
           return {
             id: s.id,
@@ -301,7 +307,7 @@ export function Admin() {
         }));
         setServices(mappedServices);
 
-        const eventsData = await eventsRes.json();
+        const eventsData = await safeJsonArray(eventsRes);
         const mappedEvents = await Promise.all(eventsData.map(async (e: any) => {
           const imageUrls = await Promise.all(
             (e.images || []).map(async (img: string) => {
@@ -326,7 +332,7 @@ export function Admin() {
         }));
         setEvents(mappedEvents);
 
-        const faqsData = await faqsRes.json();
+        const faqsData = await safeJsonArray(faqsRes);
         setFaqs(faqsData.map((f: any) => ({
           id: f.id,
           question: f.question,
@@ -534,6 +540,7 @@ export function Admin() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
+                autoComplete="current-password"
               />
             </div>
             <button

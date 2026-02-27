@@ -1,22 +1,23 @@
 import { useState } from 'react';
-import { ModalQuoteForm } from '../components/ModalQuoteForm';
+import { EventDetailModal } from '../components/EventDetailModal';
 import { useEvents } from '../hooks/useSupabaseData';
+import type { Event } from '../types';
 
 const eventTypes = ['Todas', 'Social', 'Corporativo', 'Boda', 'Cumple', 'Producción', 'Feria', 'Foodtruck'];
 
 export function Eventos() {
   const events = useEvents();
   const [selectedType, setSelectedType] = useState('Todas');
-  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
-  const [preselectedType, setPreselectedType] = useState<string>('');
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
   const filteredEvents = selectedType === 'Todas'
     ? events.filter((e) => e.isActive)
     : events.filter((e) => e.isActive && e.eventType === selectedType);
 
-  const handleQuoteClick = (eventType: string) => {
-    setPreselectedType(eventType);
-    setIsQuoteModalOpen(true);
+  const handleOpenEvent = (event: Event) => {
+    setSelectedEvent(event);
+    setIsEventModalOpen(true);
   };
 
   return (
@@ -85,10 +86,10 @@ export function Eventos() {
                   <strong>Menú destacado:</strong> {event.highlightMenu}
                 </p>
                 <button
-                  onClick={() => handleQuoteClick(event.eventType)}
+                  onClick={() => handleOpenEvent(event)}
                   className="w-full px-4 py-2 bg-accent text-secondary font-medium rounded hover:bg-accent/90 transition-colors"
                 >
-                  Pedir presupuesto
+                  Ver galería
                 </button>
               </div>
             </div>
@@ -96,10 +97,13 @@ export function Eventos() {
         </div>
       </div>
 
-      <ModalQuoteForm
-        isOpen={isQuoteModalOpen}
-        onClose={() => setIsQuoteModalOpen(false)}
-        preselectedType={preselectedType}
+      <EventDetailModal
+        isOpen={isEventModalOpen}
+        onClose={() => {
+          setIsEventModalOpen(false);
+          setSelectedEvent(null);
+        }}
+        event={selectedEvent}
       />
     </div>
   );

@@ -137,10 +137,15 @@ export function Home() {
                   <img
                     src={service.image}
                     alt={service.title}
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full ${
+                      service.image === '/images/logo.svg'
+                        ? 'object-contain p-10 opacity-60'
+                        : 'object-cover'
+                    }`}
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
                       target.src = '/images/logo.svg';
+                      target.className = 'w-full h-full object-contain p-10 opacity-60';
                     }}
                   />
                 </div>
