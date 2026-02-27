@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { EventDetailModal } from '../components/EventDetailModal';
-import { useEvents } from '../hooks/useSupabaseData';
+import { useEvents, usePublicConfig } from '../hooks/useSupabaseData';
 import type { Event } from '../types';
 
 const eventTypes = ['Todas', 'Social', 'Corporativo', 'Boda', 'Cumple', 'Producción', 'Feria', 'Foodtruck'];
 
 export function Eventos() {
   const events = useEvents();
+  const { config } = usePublicConfig();
   const [selectedType, setSelectedType] = useState('Todas');
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -23,7 +24,10 @@ export function Eventos() {
   return (
     <div className="min-h-screen bg-primary">
       {/* Hero */}
-      <section className="relative min-h-[50vh] flex items-center justify-center bg-cover bg-center" style={{ backgroundImage: 'url(/images/hero-catering.jpg)' }}>
+      <section
+        className="relative min-h-[50vh] flex items-center justify-center bg-cover bg-center"
+        style={{ backgroundImage: `url(${config?.eventsHeroImage || '/images/hero-catering.jpg'})` }}
+      >
         <div className="absolute inset-0 bg-black/60" />
         <div className="relative z-10 container mx-auto px-4 text-center">
           <h1 className="font-display text-4xl md:text-6xl text-secondary mb-4">

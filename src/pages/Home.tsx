@@ -4,13 +4,14 @@ import { ProductCard } from '../components/ProductCard';
 import { ModalQuoteForm } from '../components/ModalQuoteForm';
 import { ServiceDetailModal } from '../components/ServiceDetailModal';
 import { openWhatsApp } from '../utils/whatsapp';
-import { useProducts, useEvents, useFAQs, useServices } from '../hooks/useSupabaseData';
+import { useProducts, useEvents, useFAQs, useServices, usePublicConfig } from '../hooks/useSupabaseData';
 
 export function Home() {
   const { products } = useProducts();
   const events = useEvents();
   const faqs = useFAQs();
   const services = useServices();
+  const { config } = usePublicConfig();
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isServiceDetailOpen, setIsServiceDetailOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<{ title: string; description: string } | null>(null);
@@ -85,7 +86,10 @@ export function Home() {
   return (
     <div>
       {/* Hero */}
-      <section className="relative min-h-[80vh] flex items-center justify-center bg-cover bg-center" style={{ backgroundImage: 'url(/images/hero-catering.jpg)' }}>
+      <section
+        className="relative min-h-[80vh] flex items-center justify-center bg-cover bg-center"
+        style={{ backgroundImage: `url(${config?.homeHeroImage || '/images/hero-catering.jpg'})` }}
+      >
         <div className="absolute inset-0 bg-black/60" />
         <div className="relative z-10 container mx-auto px-4 text-center">
           <h1 className="font-display text-4xl md:text-6xl lg:text-7xl text-secondary mb-6">

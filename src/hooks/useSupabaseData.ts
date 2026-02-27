@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabasePublic } from '../lib/supabasePublic';
 import { apiUrl } from '../lib/api';
 import { getImageUrl } from '../lib/imageUrl';
-import type { Product, Event, FAQ, Service } from '../types';
+import type { Product, Event, FAQ, Service, SiteConfig } from '../types';
 
 export function useProducts(): { products: Product[]; loading: boolean } {
   const [products, setProducts] = useState<Product[]>([]);
@@ -91,6 +91,64 @@ export function useProducts(): { products: Product[]; loading: boolean } {
   }, []);
 
   return { products, loading };
+}
+
+export function usePublicConfig(): { config: SiteConfig | null; loading: boolean } {
+  const [config, setConfig] = useState<SiteConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchConfig() {
+      setLoading(true);
+      try {
+        const isDev = import.meta.env.DEV;
+        let data: any;
+        if (isDev) {
+          const { data: cfg, error } = await supabasePublic
+            .from('fuegoamigo_site_config')
+            .select('*')
+            .limit(1)
+            .maybeSingle();
+          if (error) throw error;
+          data = cfg;
+        } else {
+          const res = await fetch(apiUrl('public-config'));
+          data = await res.json().catch(() => null);
+        }
+
+        if (!data) {
+          setConfig(null);
+          return;
+        }
+
+        const homeHeroImage = data.home_hero_image ? await getImageUrl(data.home_hero_image) : '';
+        const eventsHeroImage = data.events_hero_image ? await getImageUrl(data.events_hero_image) : '';
+
+        setConfig({
+          id: data.id || '',
+          brandName: data.brand_name || 'Fuego Amigo',
+          whatsapp: data.whatsapp || '',
+          email: data.email || '',
+          address: data.address || '',
+          zone: data.zone || '',
+          hours: data.hours || {},
+          paymentMethods: data.payment_methods || [],
+          deliveryOptions: data.delivery_options || [],
+          waTemplates: data.wa_templates || {},
+          homeHeroImage,
+          eventsHeroImage,
+        });
+      } catch (error) {
+        console.error('Error fetching config:', error);
+        setConfig(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchConfig();
+  }, []);
+
+  return { config, loading };
 }
 
 export function useEvents(): Event[] {

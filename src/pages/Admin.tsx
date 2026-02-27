@@ -458,6 +458,8 @@ export function Admin() {
         paymentMethods: configData.payment_methods || [],
         deliveryOptions: configData.delivery_options || [],
         waTemplates: configData.wa_templates || {},
+        homeHeroImage: configData.home_hero_image || '',
+        eventsHeroImage: configData.events_hero_image || '',
       });
     } catch (error) {
       console.error('Error loading config:', error);
@@ -2612,7 +2614,12 @@ function ConfigSection({
     zone: '',
     payment_methods: [],
     delivery_options: [],
+    home_hero_image: '',
+    events_hero_image: '',
   });
+  const [uploadingHero, setUploadingHero] = useState<'home' | 'events' | null>(null);
+  const [homeHeroPreview, setHomeHeroPreview] = useState('');
+  const [eventsHeroPreview, setEventsHeroPreview] = useState('');
 
   useEffect(() => {
     if (config) {
@@ -2624,9 +2631,68 @@ function ConfigSection({
         zone: config.zone || '',
         payment_methods: config.paymentMethods || [],
         delivery_options: config.deliveryOptions || [],
+        home_hero_image: config.homeHeroImage || '',
+        events_hero_image: config.eventsHeroImage || '',
       });
+      setHomeHeroPreview(config.homeHeroImage || '');
+      setEventsHeroPreview(config.eventsHeroImage || '');
     }
   }, [config]);
+
+  const validateImageFile = (file: File): { valid: boolean; error?: string } => {
+    const maxSize = 1572864; // 1.5MB
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (file.size > maxSize) return { valid: false, error: 'El archivo excede el tamaño máximo de 1.5MB' };
+    if (!allowedTypes.includes(file.type)) return { valid: false, error: 'Tipo de archivo no permitido. Solo JPEG, PNG y WebP' };
+    return { valid: true };
+  };
+
+  const handleHeroUpload = async (kind: 'home' | 'events', e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+
+    setUploadingHero(kind);
+    try {
+      const entityId = `site-config-${config?.id || 'default'}`;
+      const signResponse = await apiFetch<{ signedUrl: string; path: string }>('admin-assets-sign-upload', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          entityId,
+          filename: file.name,
+          contentType: file.type,
+        }),
+      });
+
+      const uploadResponse = await fetch(signResponse.signedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+      if (!uploadResponse.ok) throw new Error('Error al subir la imagen');
+
+      if (kind === 'home') {
+        setFormData((prev: any) => ({ ...prev, home_hero_image: signResponse.path }));
+        setHomeHeroPreview(URL.createObjectURL(file));
+      } else {
+        setFormData((prev: any) => ({ ...prev, events_hero_image: signResponse.path }));
+        setEventsHeroPreview(URL.createObjectURL(file));
+      }
+      alert('Imagen subida exitosamente');
+    } catch (error: any) {
+      console.error('Error uploading hero image:', error);
+      alert(`Error al subir imagen: ${error.message}`);
+    } finally {
+      setUploadingHero(null);
+      if (e.target) e.target.value = '';
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -2699,6 +2765,68 @@ function ConfigSection({
             />
           </div>
         </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Hero (Home)</label>
+            <input
+              type="text"
+              value={formData.home_hero_image}
+              onChange={(e) => setFormData({ ...formData, home_hero_image: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              placeholder="Path de bucket (fuegoamigo/...) o URL"
+            />
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => handleHeroUpload('home', e)}
+              disabled={uploadingHero !== null}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary mt-2"
+            />
+            {(homeHeroPreview || formData.home_hero_image) && (
+              <img
+                src={homeHeroPreview || formData.home_hero_image}
+                alt="Hero Home"
+                className="mt-3 w-full h-32 object-cover rounded border border-neutral-700"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/images/logo.svg';
+                  target.className = 'mt-3 w-full h-32 object-contain p-6 opacity-60 rounded border border-neutral-700';
+                }}
+              />
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Hero (Eventos)</label>
+            <input
+              type="text"
+              value={formData.events_hero_image}
+              onChange={(e) => setFormData({ ...formData, events_hero_image: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              placeholder="Path de bucket (fuegoamigo/...) o URL"
+            />
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => handleHeroUpload('events', e)}
+              disabled={uploadingHero !== null}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary mt-2"
+            />
+            {(eventsHeroPreview || formData.events_hero_image) && (
+              <img
+                src={eventsHeroPreview || formData.events_hero_image}
+                alt="Hero Eventos"
+                className="mt-3 w-full h-32 object-cover rounded border border-neutral-700"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/images/logo.svg';
+                  target.className = 'mt-3 w-full h-32 object-contain p-6 opacity-60 rounded border border-neutral-700';
+                }}
+              />
+            )}
+          </div>
+        </div>
+
         <button
           onClick={handleSave}
           className="px-6 py-2 bg-accent text-secondary rounded hover:bg-accent/90"

@@ -39,6 +39,8 @@ export const handler: Handler = async (event) => {
           payment_methods: [],
           delivery_options: [],
           wa_templates: {},
+          home_hero_image: '',
+          events_hero_image: '',
         }),
       };
     }

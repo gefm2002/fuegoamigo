@@ -48,6 +48,8 @@ export interface SiteConfig {
   paymentMethods?: string[];
   deliveryOptions?: string[];
   waTemplates?: Record<string, string>;
+  homeHeroImage?: string;
+  eventsHeroImage?: string;
 }
 
 export interface Order {

@@ -28,6 +28,8 @@ export const handler: Handler = async (event) => {
     if (body.payment_methods !== undefined) configData.payment_methods = body.payment_methods;
     if (body.delivery_options !== undefined) configData.delivery_options = body.delivery_options;
     if (body.wa_templates !== undefined) configData.wa_templates = body.wa_templates;
+    if (body.home_hero_image !== undefined) configData.home_hero_image = body.home_hero_image;
+    if (body.events_hero_image !== undefined) configData.events_hero_image = body.events_hero_image;
 
     // Verificar si existe configuración
     const { data: existing, error: checkError } = await supabaseServer
