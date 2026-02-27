@@ -50,6 +50,12 @@ export interface SiteConfig {
   waTemplates?: Record<string, string>;
   homeHeroImage?: string;
   eventsHeroImage?: string;
+  homeHeroTitle?: string;
+  homeHeroSubtitle?: string;
+  homeHeroPrimaryLabel?: string;
+  homeHeroSecondaryLabel?: string;
+  homeHeroSecondaryMessage?: string;
+  homeHeroChips?: string[];
 }
 
 export interface Order {

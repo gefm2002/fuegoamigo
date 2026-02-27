@@ -93,27 +93,30 @@ export function Home() {
         <div className="absolute inset-0 bg-black/60" />
         <div className="relative z-10 container mx-auto px-4 text-center">
           <h1 className="font-display text-4xl md:text-6xl lg:text-7xl text-secondary mb-6">
-            Catering y foodtruck para eventos que se sienten
+            {config?.homeHeroTitle || 'Catering y foodtruck para eventos que se sienten'}
           </h1>
           <p className="text-lg md:text-xl text-neutral-300 mb-8 max-w-2xl mx-auto">
-            Ahumados, parrilla, finger food y boxes. Social, corporativo y producciones.
+            {config?.homeHeroSubtitle || 'Ahumados, parrilla, finger food y boxes. Social, corporativo y producciones.'}
           </p>
           <div className="flex flex-wrap justify-center gap-4 mb-8">
             <button
               onClick={() => setIsQuoteModalOpen(true)}
               className="px-6 py-3 bg-accent text-secondary font-medium rounded hover:bg-accent/90 transition-colors"
             >
-              Pedir presupuesto
+              {config?.homeHeroPrimaryLabel || 'Pedir presupuesto'}
             </button>
             <button
-              onClick={() => openWhatsApp('Hola! Quiero hacer una consulta.')}
+              onClick={() => openWhatsApp(config?.homeHeroSecondaryMessage || 'Hola! Quiero hacer una consulta.')}
               className="px-6 py-3 border-2 border-secondary text-secondary font-medium rounded hover:bg-secondary hover:text-primary transition-colors"
             >
-              Hablar por WhatsApp
+              {config?.homeHeroSecondaryLabel || 'Hablar por WhatsApp'}
             </button>
           </div>
           <div className="flex flex-wrap justify-center gap-2">
-            {['Social', 'Corporativo', 'Producciones', 'Foodtruck', 'Boxes'].map((chip) => (
+            {(config?.homeHeroChips && config.homeHeroChips.length > 0
+              ? config.homeHeroChips
+              : ['Social', 'Corporativo', 'Producciones', 'Foodtruck', 'Boxes']
+            ).map((chip) => (
               <span
                 key={chip}
                 className="px-4 py-2 bg-neutral-900/80 backdrop-blur-sm border border-neutral-700 rounded-full text-neutral-300 text-sm"

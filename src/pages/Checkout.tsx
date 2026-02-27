@@ -5,11 +5,13 @@ import { buildWhatsAppLink } from '../utils/cartWhatsApp';
 import { WHATSAPP_NUMBER } from '../utils/whatsapp';
 import { apiFetch } from '../lib/api';
 import { createOrderDev } from '../lib/ordersDev';
+import { useToast } from '../context/ToastContext';
 
 export function Checkout() {
   const navigate = useNavigate();
   const { items, total, clear } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const toast = useToast();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -103,7 +105,10 @@ export function Checkout() {
         orderData,
         items: items.length,
       });
-      alert(`Hubo un error al procesar tu pedido: ${errorMessage}. Por favor, inténtalo de nuevo.`);
+      toast.error(
+        `Hubo un error al procesar tu pedido: ${errorMessage}. Por favor, intentá de nuevo.`,
+        'No se pudo procesar'
+      );
     } finally {
       setIsSubmitting(false);
     }

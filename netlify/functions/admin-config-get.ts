@@ -41,6 +41,12 @@ export const handler: Handler = async (event) => {
           wa_templates: {},
           home_hero_image: '',
           events_hero_image: '',
+          home_hero_title: '',
+          home_hero_subtitle: '',
+          home_hero_primary_label: '',
+          home_hero_secondary_label: '',
+          home_hero_secondary_message: '',
+          home_hero_chips: [],
         }),
       };
     }

@@ -6,6 +6,8 @@ import { slugify } from '../utils/slugify';
 import { supabasePublic } from '../lib/supabasePublic';
 import { getImageUrl } from '../lib/imageUrl';
 import { compressImageToWebp } from '../lib/imageCompress';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { WHATSAPP_NUMBER } from '../utils/whatsapp';
 import { buildWhatsAppLink } from '../utils/cartWhatsApp';
 import { getDashboardStatsDev } from '../lib/dashboardDev';
@@ -461,6 +463,12 @@ export function Admin() {
         waTemplates: configData.wa_templates || {},
         homeHeroImage: configData.home_hero_image || '',
         eventsHeroImage: configData.events_hero_image || '',
+        homeHeroTitle: configData.home_hero_title || '',
+        homeHeroSubtitle: configData.home_hero_subtitle || '',
+        homeHeroPrimaryLabel: configData.home_hero_primary_label || '',
+        homeHeroSecondaryLabel: configData.home_hero_secondary_label || '',
+        homeHeroSecondaryMessage: configData.home_hero_secondary_message || '',
+        homeHeroChips: Array.isArray(configData.home_hero_chips) ? configData.home_hero_chips : [],
       });
     } catch (error) {
       console.error('Error loading config:', error);
@@ -781,6 +789,8 @@ function ProductsSection({
   token: string;
   onReload: () => void;
 }) {
+  const toast = useToast();
+  const { confirm } = useConfirm();
   const [formData, setFormData] = useState<any>({
     name: '',
     description: '',
@@ -821,12 +831,12 @@ function ProductsSection({
 
     const validation = validateImageFile(file);
     if (!validation.valid) {
-      alert(validation.error);
+      toast.error(validation.error || 'Archivo inválido', 'Imagen');
       return;
     }
 
     if (formData.images.length >= 5) {
-      alert('Máximo 5 imágenes por producto');
+      toast.error('Máximo 5 imágenes por producto', 'Imágenes');
       return;
     }
 
@@ -871,10 +881,10 @@ function ProductsSection({
       const previewUrl = URL.createObjectURL(payload.blob);
       setImagePreviews([...imagePreviews, previewUrl]);
 
-      alert('Imagen subida exitosamente');
+      toast.success('Imagen subida exitosamente', 'Imágenes');
     } catch (error: any) {
       console.error('Error uploading image:', error);
-      alert(`Error al subir imagen: ${error.message}`);
+      toast.error(`Error al subir imagen: ${error.message}`, 'Imágenes');
     } finally {
       setUploadingImage(false);
       // Reset input
@@ -1017,14 +1027,21 @@ function ProductsSection({
       });
       setEditingProduct(null);
       onReload();
-      alert('Producto guardado exitosamente');
+      toast.success('Producto guardado exitosamente', 'Productos');
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'Productos');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar este producto?')) return;
+    const ok = await confirm({
+      title: 'Eliminar producto',
+      message: '¿Eliminar este producto? Esta acción no se puede deshacer.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await apiFetch('admin-products-delete', {
         method: 'DELETE',
@@ -1032,9 +1049,9 @@ function ProductsSection({
         query: { id },
       });
       onReload();
-      alert('Producto eliminado');
+      toast.success('Producto eliminado', 'Productos');
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'Productos');
     }
   };
 
@@ -1301,6 +1318,8 @@ function CategoriesSection({
   token: string;
   onReload: () => void;
 }) {
+  const toast = useToast();
+  const { confirm } = useConfirm();
   const [formData, setFormData] = useState<any>({
     name: '',
     description: '',
@@ -1334,14 +1353,21 @@ function CategoriesSection({
       });
       setEditingCategory(null);
       onReload();
-      alert('Categoría guardada');
+      toast.success('Categoría guardada', 'Categorías');
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'Categorías');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar esta categoría?')) return;
+    const ok = await confirm({
+      title: 'Eliminar categoría',
+      message: '¿Eliminar esta categoría? Esta acción no se puede deshacer.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await apiFetch('admin-categories-delete', {
         method: 'DELETE',
@@ -1349,9 +1375,9 @@ function CategoriesSection({
         query: { id },
       });
       onReload();
-      alert('Categoría eliminada');
+      toast.success('Categoría eliminada', 'Categorías');
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'Categorías');
     }
   };
 
@@ -1474,6 +1500,8 @@ function ServicesSection({
   token: string;
   onReload: () => void;
 }) {
+  const toast = useToast();
+  const { confirm } = useConfirm();
   const [formData, setFormData] = useState<any>({
     title: '',
     slug: '',
@@ -1542,7 +1570,7 @@ function ServicesSection({
 
     const validation = validateImageFile(file);
     if (!validation.valid) {
-      alert(validation.error);
+      toast.error(validation.error || 'Archivo inválido', 'Imagen');
       return;
     }
 
@@ -1579,10 +1607,10 @@ function ServicesSection({
 
       setFormData((prev: any) => ({ ...prev, image: signResponse.path }));
       setImagePreview(URL.createObjectURL(payload.blob));
-      alert('Imagen subida exitosamente');
+      toast.success('Imagen subida exitosamente', 'Imagen');
     } catch (error: any) {
       console.error('Error uploading image:', error);
-      alert(`Error al subir imagen: ${error.message}`);
+      toast.error(`Error al subir imagen: ${error.message}`, 'Imagen');
     } finally {
       setUploadingImage(false);
       if (e.target) e.target.value = '';
@@ -1604,14 +1632,21 @@ function ServicesSection({
       });
       setEditingService(null);
       onReload();
-      alert('Servicio guardado exitosamente');
+      toast.success('Servicio guardado exitosamente', 'Servicios');
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'Servicios');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar este servicio?')) return;
+    const ok = await confirm({
+      title: 'Eliminar servicio',
+      message: '¿Eliminar este servicio? Esta acción no se puede deshacer.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await apiFetch('admin-services-delete', {
         method: 'DELETE',
@@ -1619,9 +1654,9 @@ function ServicesSection({
         query: { id },
       });
       onReload();
-      alert('Servicio eliminado');
+      toast.success('Servicio eliminado', 'Servicios');
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'Servicios');
     }
   };
 
@@ -1809,6 +1844,8 @@ function EventsSection({
   token: string;
   onReload: () => void;
 }) {
+  const toast = useToast();
+  const { confirm } = useConfirm();
   const [formData, setFormData] = useState<any>({
     title: '',
     event_type: '',
@@ -1852,10 +1889,10 @@ function EventsSection({
   }, [editingEvent]);
 
   const validateImageFile = (file: File): { valid: boolean; error?: string } => {
-    const maxSize = 1572864;
+    const maxSize = 12582912; // 12MB
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (file.size > maxSize) {
-      return { valid: false, error: 'El archivo excede el tamaño máximo de 1.5MB' };
+      return { valid: false, error: 'El archivo excede el tamaño máximo de 12MB' };
     }
     if (!allowedTypes.includes(file.type)) {
       return { valid: false, error: 'Tipo de archivo no permitido. Solo JPEG, PNG y WebP' };
@@ -1869,43 +1906,47 @@ function EventsSection({
 
     const validation = validateImageFile(file);
     if (!validation.valid) {
-      alert(validation.error);
+      toast.error(validation.error || 'Archivo inválido', 'Imágenes');
       return;
     }
 
     if (formData.images.length >= 5) {
-      alert('Máximo 5 imágenes por evento');
+      toast.error('Máximo 5 imágenes por evento', 'Imágenes');
       return;
     }
 
     setUploadingImage(true);
     try {
       const entityId = editingEvent?.id || 'temp-' + Date.now();
+      const shouldCompress = file.size > 1572864; // 1.5MB
+      const payload = shouldCompress
+        ? await compressImageToWebp(file, { maxWidth: 1920, maxHeight: 1080, targetBytes: 1400000 })
+        : { blob: file, contentType: file.type, filename: file.name };
       const signResponse = await apiFetch<{ signedUrl: string; path: string }>('admin-assets-sign-upload', {
         method: 'POST',
         token,
         body: JSON.stringify({
           entityId,
-          filename: file.name,
-          contentType: file.type,
+          filename: payload.filename,
+          contentType: payload.contentType,
         }),
       });
 
       const uploadResponse = await fetch(signResponse.signedUrl, {
         method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
+        body: payload.blob,
+        headers: { 'Content-Type': payload.contentType },
       });
 
       if (!uploadResponse.ok) throw new Error('Error al subir la imagen');
 
       const newImages = [...formData.images, signResponse.path];
       setFormData({ ...formData, images: newImages });
-      const previewUrl = URL.createObjectURL(file);
+      const previewUrl = URL.createObjectURL(payload.blob);
       setImagePreviews([...imagePreviews, previewUrl]);
-      alert('Imagen subida exitosamente');
+      toast.success('Imagen subida exitosamente', 'Imágenes');
     } catch (error: any) {
-      alert(`Error al subir imagen: ${error.message}`);
+      toast.error(`Error al subir imagen: ${error.message}`, 'Imágenes');
     } finally {
       setUploadingImage(false);
       if (e.target) e.target.value = '';
@@ -1931,14 +1972,21 @@ function EventsSection({
       });
       setEditingEvent(null);
       onReload();
-      alert('Evento guardado exitosamente');
+      toast.success('Evento guardado exitosamente', 'Eventos');
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'Eventos');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar este evento?')) return;
+    const ok = await confirm({
+      title: 'Eliminar evento',
+      message: '¿Eliminar este evento? Esta acción no se puede deshacer.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await apiFetch('admin-events-delete', {
         method: 'DELETE',
@@ -1946,9 +1994,9 @@ function EventsSection({
         query: { id },
       });
       onReload();
-      alert('Evento eliminado');
+      toast.success('Evento eliminado', 'Eventos');
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'Eventos');
     }
   };
 
@@ -2145,6 +2193,8 @@ function FAQsSection({
   token: string;
   onReload: () => void;
 }) {
+  const toast = useToast();
+  const { confirm } = useConfirm();
   const [formData, setFormData] = useState<any>({
     question: '',
     answer: '',
@@ -2183,14 +2233,21 @@ function FAQsSection({
       });
       setEditingFAQ(null);
       onReload();
-      alert('FAQ guardada exitosamente');
+      toast.success('FAQ guardada exitosamente', 'FAQs');
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'FAQs');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar esta FAQ?')) return;
+    const ok = await confirm({
+      title: 'Eliminar FAQ',
+      message: '¿Eliminar esta FAQ? Esta acción no se puede deshacer.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await apiFetch('admin-faqs-delete', {
         method: 'DELETE',
@@ -2198,9 +2255,9 @@ function FAQsSection({
         query: { id },
       });
       onReload();
-      alert('FAQ eliminada');
+      toast.success('FAQ eliminada', 'FAQs');
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'FAQs');
     }
   };
 
@@ -2322,6 +2379,7 @@ function OrdersSection({
   onUpdateOrder: () => void;
   token: string;
 }) {
+  const toast = useToast();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [pendingWhatsAppUrl, setPendingWhatsAppUrl] = useState<string | null>(null);
@@ -2354,7 +2412,7 @@ function OrdersSection({
         onSelectOrder(orderId);
       }
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'Órdenes');
     }
   };
 
@@ -2397,7 +2455,7 @@ function OrdersSection({
         setShowWhatsAppModal(true);
       }
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      toast.error(error.message || 'Error desconocido', 'Órdenes');
     }
   };
 
@@ -2615,6 +2673,7 @@ function ConfigSection({
   token: string;
   onReload: () => void;
 }) {
+  const toast = useToast();
   const [formData, setFormData] = useState<any>({
     brand_name: '',
     whatsapp: '',
@@ -2642,6 +2701,12 @@ function ConfigSection({
         delivery_options: config.deliveryOptions || [],
         home_hero_image: config.homeHeroImage || '',
         events_hero_image: config.eventsHeroImage || '',
+        home_hero_title: config.homeHeroTitle || '',
+        home_hero_subtitle: config.homeHeroSubtitle || '',
+        home_hero_primary_label: config.homeHeroPrimaryLabel || '',
+        home_hero_secondary_label: config.homeHeroSecondaryLabel || '',
+        home_hero_secondary_message: config.homeHeroSecondaryMessage || '',
+        home_hero_chips: (config.homeHeroChips || []).join(', '),
       });
       setHomeHeroPreview(config.homeHeroImage || '');
       setEventsHeroPreview(config.eventsHeroImage || '');
@@ -2662,7 +2727,7 @@ function ConfigSection({
 
     const validation = validateImageFile(file);
     if (!validation.valid) {
-      alert(validation.error);
+      toast.error(validation.error || 'Archivo inválido', 'Hero');
       return;
     }
 
@@ -2698,10 +2763,10 @@ function ConfigSection({
         setFormData((prev: any) => ({ ...prev, events_hero_image: signResponse.path }));
         setEventsHeroPreview(URL.createObjectURL(payload.blob));
       }
-      alert('Imagen subida exitosamente');
+      toast.success('Imagen subida exitosamente', 'Hero');
     } catch (error: any) {
       console.error('Error uploading hero image:', error);
-      alert(`Error al subir imagen: ${error.message}`);
+      toast.error(`Error al subir imagen: ${error.message}`, 'Hero');
     } finally {
       setUploadingHero(null);
       if (e.target) e.target.value = '';
@@ -2711,18 +2776,28 @@ function ConfigSection({
   const handleSave = async () => {
     try {
       console.log('Guardando configuración:', formData);
+      const payload = {
+        ...formData,
+        home_hero_chips:
+          typeof formData.home_hero_chips === 'string'
+            ? formData.home_hero_chips
+                .split(',')
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+            : formData.home_hero_chips,
+      };
       const response = await apiFetch('admin-config-update', {
         method: 'PUT',
         token,
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
       console.log('Configuración guardada:', response);
-      alert('Configuración guardada exitosamente');
+      toast.success('Configuración guardada exitosamente', 'Configuración');
       onReload();
     } catch (error: any) {
       console.error('Error guardando configuración:', error);
       const errorMessage = error?.message || 'Error desconocido';
-      alert(`Error: ${errorMessage}`);
+      toast.error(errorMessage, 'Configuración');
     }
   };
 
@@ -2838,6 +2913,72 @@ function ConfigSection({
                 }}
               />
             )}
+          </div>
+        </div>
+
+        <div className="border-t border-neutral-700 pt-6 mt-2 space-y-4">
+          <h2 className="font-display text-xl text-secondary">Hero (Home) – textos y botones</h2>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Título</label>
+            <input
+              type="text"
+              value={formData.home_hero_title}
+              onChange={(e) => setFormData({ ...formData, home_hero_title: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              placeholder="Catering y foodtruck para eventos que se sienten"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Subtítulo</label>
+            <textarea
+              value={formData.home_hero_subtitle}
+              onChange={(e) => setFormData({ ...formData, home_hero_subtitle: e.target.value })}
+              rows={2}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              placeholder="Ahumados, parrilla, finger food y boxes..."
+            />
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Botón principal (abre cotización)</label>
+              <input
+                type="text"
+                value={formData.home_hero_primary_label}
+                onChange={(e) => setFormData({ ...formData, home_hero_primary_label: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+                placeholder="Pedir presupuesto"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Botón secundario (WhatsApp)</label>
+              <input
+                type="text"
+                value={formData.home_hero_secondary_label}
+                onChange={(e) => setFormData({ ...formData, home_hero_secondary_label: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+                placeholder="Hablar por WhatsApp"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Mensaje de WhatsApp (botón secundario)</label>
+            <input
+              type="text"
+              value={formData.home_hero_secondary_message}
+              onChange={(e) => setFormData({ ...formData, home_hero_secondary_message: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              placeholder="Hola! Quiero hacer una consulta."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Chips (separados por coma)</label>
+            <input
+              type="text"
+              value={formData.home_hero_chips}
+              onChange={(e) => setFormData({ ...formData, home_hero_chips: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              placeholder="Social, Corporativo, Producciones, Foodtruck, Boxes"
+            />
           </div>
         </div>
 

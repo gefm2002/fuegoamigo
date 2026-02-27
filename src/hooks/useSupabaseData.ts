@@ -137,6 +137,12 @@ export function usePublicConfig(): { config: SiteConfig | null; loading: boolean
           waTemplates: data.wa_templates || {},
           homeHeroImage,
           eventsHeroImage,
+          homeHeroTitle: data.home_hero_title || '',
+          homeHeroSubtitle: data.home_hero_subtitle || '',
+          homeHeroPrimaryLabel: data.home_hero_primary_label || '',
+          homeHeroSecondaryLabel: data.home_hero_secondary_label || '',
+          homeHeroSecondaryMessage: data.home_hero_secondary_message || '',
+          homeHeroChips: Array.isArray(data.home_hero_chips) ? data.home_hero_chips : [],
         });
       } catch (error) {
         console.error('Error fetching config:', error);

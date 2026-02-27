@@ -30,6 +30,12 @@ export const handler: Handler = async (event) => {
     if (body.wa_templates !== undefined) configData.wa_templates = body.wa_templates;
     if (body.home_hero_image !== undefined) configData.home_hero_image = body.home_hero_image;
     if (body.events_hero_image !== undefined) configData.events_hero_image = body.events_hero_image;
+    if (body.home_hero_title !== undefined) configData.home_hero_title = body.home_hero_title;
+    if (body.home_hero_subtitle !== undefined) configData.home_hero_subtitle = body.home_hero_subtitle;
+    if (body.home_hero_primary_label !== undefined) configData.home_hero_primary_label = body.home_hero_primary_label;
+    if (body.home_hero_secondary_label !== undefined) configData.home_hero_secondary_label = body.home_hero_secondary_label;
+    if (body.home_hero_secondary_message !== undefined) configData.home_hero_secondary_message = body.home_hero_secondary_message;
+    if (body.home_hero_chips !== undefined) configData.home_hero_chips = body.home_hero_chips;
 
     // Verificar si existe configuración
     const { data: existing, error: checkError } = await supabaseServer

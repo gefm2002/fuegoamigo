@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { CartProvider } from './cart/useCart';
 import { CartDrawerProvider, useCartDrawer } from './context/CartDrawerContext';
+import { ToastProvider } from './context/ToastContext';
+import { ConfirmProvider } from './context/ConfirmContext';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { WhatsAppFloatingButton } from './components/WhatsAppFloatingButton';
@@ -47,24 +49,28 @@ function MainContent() {
 
 function App() {
   return (
-    <CartProvider>
-      <CartDrawerProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/landing" element={<LandingProtection />} />
-            <Route
-              path="/*"
-              element={
-                <ProtectedRoute>
-                  <MainContent />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<Navigate to={checkAccess() ? '/' : '/landing'} replace />} />
-          </Routes>
-        </BrowserRouter>
-      </CartDrawerProvider>
-    </CartProvider>
+    <ToastProvider>
+      <ConfirmProvider>
+        <CartProvider>
+          <CartDrawerProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/landing" element={<LandingProtection />} />
+                <Route
+                  path="/*"
+                  element={
+                    <ProtectedRoute>
+                      <MainContent />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="*" element={<Navigate to={checkAccess() ? '/' : '/landing'} replace />} />
+              </Routes>
+            </BrowserRouter>
+          </CartDrawerProvider>
+        </CartProvider>
+      </ConfirmProvider>
+    </ToastProvider>
   );
 }
 
