@@ -2756,6 +2756,17 @@ function ConfigSection({
       });
       if (!uploadResponse.ok) throw new Error('Error al subir la imagen');
 
+      // Persistir inmediatamente en DB para que el storefront lo tome sin depender de "Guardar"
+      await apiFetch('admin-config-update', {
+        method: 'PUT',
+        token,
+        body: JSON.stringify(
+          kind === 'home'
+            ? { home_hero_image: signResponse.path }
+            : { events_hero_image: signResponse.path }
+        ),
+      });
+
       if (kind === 'home') {
         setFormData((prev: any) => ({ ...prev, home_hero_image: signResponse.path }));
         setHomeHeroPreview(URL.createObjectURL(payload.blob));
@@ -2763,7 +2774,8 @@ function ConfigSection({
         setFormData((prev: any) => ({ ...prev, events_hero_image: signResponse.path }));
         setEventsHeroPreview(URL.createObjectURL(payload.blob));
       }
-      toast.success('Imagen subida exitosamente', 'Hero');
+      toast.success('Hero actualizado', 'Hero');
+      onReload();
     } catch (error: any) {
       console.error('Error uploading hero image:', error);
       toast.error(`Error al subir imagen: ${error.message}`, 'Hero');
