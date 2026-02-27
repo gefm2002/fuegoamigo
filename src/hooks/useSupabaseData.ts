@@ -151,6 +151,11 @@ export function usePublicConfig(): { config: SiteConfig | null; loading: boolean
           homeHeroSecondaryLabel: data.home_hero_secondary_label || '',
           homeHeroSecondaryMessage: data.home_hero_secondary_message || '',
           homeHeroChips: Array.isArray(data.home_hero_chips) ? data.home_hero_chips : [],
+          eventsHeroTitle: data.events_hero_title || '',
+          eventsHeroSubtitle: data.events_hero_subtitle || '',
+          eventsHeroPrimaryLabel: data.events_hero_primary_label || '',
+          eventsHeroSecondaryLabel: data.events_hero_secondary_label || '',
+          eventsHeroSecondaryMessage: data.events_hero_secondary_message || '',
         });
       } catch (error) {
         console.error('Error fetching config:', error);

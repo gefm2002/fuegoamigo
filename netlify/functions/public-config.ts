@@ -39,6 +39,11 @@ export const handler: Handler = async () => {
           home_hero_secondary_label: '',
           home_hero_secondary_message: '',
           home_hero_chips: [],
+          events_hero_title: '',
+          events_hero_subtitle: '',
+          events_hero_primary_label: '',
+          events_hero_secondary_label: '',
+          events_hero_secondary_message: '',
         }),
       };
     }

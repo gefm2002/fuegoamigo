@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ProductCard } from '../components/ProductCard';
 import { ModalQuoteForm } from '../components/ModalQuoteForm';
@@ -11,11 +11,12 @@ export function Home() {
   const events = useEvents();
   const faqs = useFAQs();
   const services = useServices();
-  const { config } = usePublicConfig();
+  const { config, loading: configLoading } = usePublicConfig();
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isServiceDetailOpen, setIsServiceDetailOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<{ title: string; description: string } | null>(null);
   const [selectedEventType, setSelectedEventType] = useState('Social');
+  const [heroBgReadyUrl, setHeroBgReadyUrl] = useState<string>('');
 
   // Evitar mezclar servicios u otras entidades: mostrar solo categorías de tienda
   const storeCategorySlugs = [
@@ -83,12 +84,30 @@ export function Home() {
           },
         ];
 
+  const desiredHeroBgUrl = useMemo(() => {
+    if (configLoading) return '';
+    return (config?.homeHeroImage || '/images/hero-catering.jpg').trim();
+  }, [config?.homeHeroImage, configLoading]);
+
+  useEffect(() => {
+    if (!desiredHeroBgUrl) {
+      setHeroBgReadyUrl('');
+      return;
+    }
+    const img = new Image();
+    img.src = desiredHeroBgUrl;
+    img.onload = () => setHeroBgReadyUrl(desiredHeroBgUrl);
+    img.onerror = () => setHeroBgReadyUrl('');
+  }, [desiredHeroBgUrl]);
+
   return (
     <div>
       {/* Hero */}
       <section
-        className="relative min-h-[80vh] flex items-center justify-center bg-cover bg-center"
-        style={{ backgroundImage: `url(${config?.homeHeroImage || '/images/hero-catering.jpg'})` }}
+        className={`relative min-h-[80vh] flex items-center justify-center ${
+          heroBgReadyUrl ? 'bg-cover bg-center' : 'bg-gradient-to-b from-neutral-950 via-neutral-900 to-primary'
+        }`}
+        style={heroBgReadyUrl ? { backgroundImage: `url(${heroBgReadyUrl})` } : undefined}
       >
         <div className="absolute inset-0 bg-black/60" />
         <div className="relative z-10 container mx-auto px-4 text-center">

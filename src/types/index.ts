@@ -56,6 +56,11 @@ export interface SiteConfig {
   homeHeroSecondaryLabel?: string;
   homeHeroSecondaryMessage?: string;
   homeHeroChips?: string[];
+  eventsHeroTitle?: string;
+  eventsHeroSubtitle?: string;
+  eventsHeroPrimaryLabel?: string;
+  eventsHeroSecondaryLabel?: string;
+  eventsHeroSecondaryMessage?: string;
 }
 
 export interface Order {

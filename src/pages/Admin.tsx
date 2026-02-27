@@ -469,6 +469,11 @@ export function Admin() {
         homeHeroSecondaryLabel: configData.home_hero_secondary_label || '',
         homeHeroSecondaryMessage: configData.home_hero_secondary_message || '',
         homeHeroChips: Array.isArray(configData.home_hero_chips) ? configData.home_hero_chips : [],
+        eventsHeroTitle: configData.events_hero_title || '',
+        eventsHeroSubtitle: configData.events_hero_subtitle || '',
+        eventsHeroPrimaryLabel: configData.events_hero_primary_label || '',
+        eventsHeroSecondaryLabel: configData.events_hero_secondary_label || '',
+        eventsHeroSecondaryMessage: configData.events_hero_secondary_message || '',
       });
     } catch (error) {
       console.error('Error loading config:', error);
@@ -2684,6 +2689,17 @@ function ConfigSection({
     delivery_options: [],
     home_hero_image: '',
     events_hero_image: '',
+    home_hero_title: '',
+    home_hero_subtitle: '',
+    home_hero_primary_label: '',
+    home_hero_secondary_label: '',
+    home_hero_secondary_message: '',
+    home_hero_chips: '',
+    events_hero_title: '',
+    events_hero_subtitle: '',
+    events_hero_primary_label: '',
+    events_hero_secondary_label: '',
+    events_hero_secondary_message: '',
   });
   const [uploadingHero, setUploadingHero] = useState<'home' | 'events' | null>(null);
   const [homeHeroPreview, setHomeHeroPreview] = useState('');
@@ -2707,6 +2723,11 @@ function ConfigSection({
         home_hero_secondary_label: config.homeHeroSecondaryLabel || '',
         home_hero_secondary_message: config.homeHeroSecondaryMessage || '',
         home_hero_chips: (config.homeHeroChips || []).join(', '),
+        events_hero_title: config.eventsHeroTitle || '',
+        events_hero_subtitle: config.eventsHeroSubtitle || '',
+        events_hero_primary_label: config.eventsHeroPrimaryLabel || '',
+        events_hero_secondary_label: config.eventsHeroSecondaryLabel || '',
+        events_hero_secondary_message: config.eventsHeroSecondaryMessage || '',
       });
       setHomeHeroPreview(config.homeHeroImage || '');
       setEventsHeroPreview(config.eventsHeroImage || '');
@@ -2990,6 +3011,66 @@ function ConfigSection({
               onChange={(e) => setFormData({ ...formData, home_hero_chips: e.target.value })}
               className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
               placeholder="Social, Corporativo, Producciones, Foodtruck, Boxes"
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-neutral-700 pt-6 mt-2 space-y-4">
+          <h2 className="font-display text-xl text-secondary">Hero (Eventos) – textos y botones</h2>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Título</label>
+            <input
+              type="text"
+              value={formData.events_hero_title}
+              onChange={(e) => setFormData({ ...formData, events_hero_title: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              placeholder="Eventos Realizados"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Subtítulo</label>
+            <textarea
+              value={formData.events_hero_subtitle}
+              onChange={(e) => setFormData({ ...formData, events_hero_subtitle: e.target.value })}
+              rows={2}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              placeholder="Conocé nuestros trabajos y servicios"
+            />
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">
+                Botón principal (scroll a listado)
+              </label>
+              <input
+                type="text"
+                value={formData.events_hero_primary_label}
+                onChange={(e) => setFormData({ ...formData, events_hero_primary_label: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+                placeholder="Ver eventos"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Botón secundario (WhatsApp)</label>
+              <input
+                type="text"
+                value={formData.events_hero_secondary_label}
+                onChange={(e) => setFormData({ ...formData, events_hero_secondary_label: e.target.value })}
+                className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+                placeholder="Hablar por WhatsApp"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">
+              Mensaje de WhatsApp (botón secundario)
+            </label>
+            <input
+              type="text"
+              value={formData.events_hero_secondary_message}
+              onChange={(e) => setFormData({ ...formData, events_hero_secondary_message: e.target.value })}
+              className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+              placeholder="Hola! Quiero consultar por un evento."
             />
           </div>
         </div>

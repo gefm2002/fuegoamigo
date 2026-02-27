@@ -36,6 +36,11 @@ export const handler: Handler = async (event) => {
     if (body.home_hero_secondary_label !== undefined) configData.home_hero_secondary_label = body.home_hero_secondary_label;
     if (body.home_hero_secondary_message !== undefined) configData.home_hero_secondary_message = body.home_hero_secondary_message;
     if (body.home_hero_chips !== undefined) configData.home_hero_chips = body.home_hero_chips;
+    if (body.events_hero_title !== undefined) configData.events_hero_title = body.events_hero_title;
+    if (body.events_hero_subtitle !== undefined) configData.events_hero_subtitle = body.events_hero_subtitle;
+    if (body.events_hero_primary_label !== undefined) configData.events_hero_primary_label = body.events_hero_primary_label;
+    if (body.events_hero_secondary_label !== undefined) configData.events_hero_secondary_label = body.events_hero_secondary_label;
+    if (body.events_hero_secondary_message !== undefined) configData.events_hero_secondary_message = body.events_hero_secondary_message;
 
     // Verificar si existe configuración
     const { data: existing, error: checkError } = await supabaseServer

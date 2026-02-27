@@ -1,16 +1,40 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { EventDetailModal } from '../components/EventDetailModal';
 import { useEvents, usePublicConfig } from '../hooks/useSupabaseData';
 import type { Event } from '../types';
+import { openWhatsApp } from '../utils/whatsapp';
 
 const eventTypes = ['Todas', 'Social', 'Corporativo', 'Boda', 'Cumple', 'Producción', 'Feria', 'Foodtruck'];
 
 export function Eventos() {
   const events = useEvents();
-  const { config } = usePublicConfig();
+  const { config, loading: configLoading } = usePublicConfig();
   const [selectedType, setSelectedType] = useState('Todas');
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [heroBgReadyUrl, setHeroBgReadyUrl] = useState<string>('');
+
+  const heroTitle = config?.eventsHeroTitle || 'Eventos Realizados';
+  const heroSubtitle = config?.eventsHeroSubtitle || 'Conocé nuestros trabajos y servicios';
+  const primaryLabel = (config?.eventsHeroPrimaryLabel || 'Ver eventos').trim();
+  const secondaryLabel = (config?.eventsHeroSecondaryLabel || 'Hablar por WhatsApp').trim();
+  const secondaryMessage = config?.eventsHeroSecondaryMessage || 'Hola! Quiero consultar por un evento.';
+
+  const desiredHeroBgUrl = useMemo(() => {
+    if (configLoading) return '';
+    return (config?.eventsHeroImage || '/images/hero-catering.jpg').trim();
+  }, [config?.eventsHeroImage, configLoading]);
+
+  useEffect(() => {
+    if (!desiredHeroBgUrl) {
+      setHeroBgReadyUrl('');
+      return;
+    }
+    const img = new Image();
+    img.src = desiredHeroBgUrl;
+    img.onload = () => setHeroBgReadyUrl(desiredHeroBgUrl);
+    img.onerror = () => setHeroBgReadyUrl('');
+  }, [desiredHeroBgUrl]);
 
   const filteredEvents = selectedType === 'Todas'
     ? events.filter((e) => e.isActive)
@@ -25,21 +49,41 @@ export function Eventos() {
     <div className="min-h-screen bg-primary">
       {/* Hero */}
       <section
-        className="relative min-h-[50vh] flex items-center justify-center bg-cover bg-center"
-        style={{ backgroundImage: `url(${config?.eventsHeroImage || '/images/hero-catering.jpg'})` }}
+        className={`relative min-h-[50vh] flex items-center justify-center ${
+          heroBgReadyUrl ? 'bg-cover bg-center' : 'bg-gradient-to-b from-neutral-950 via-neutral-900 to-primary'
+        }`}
+        style={heroBgReadyUrl ? { backgroundImage: `url(${heroBgReadyUrl})` } : undefined}
       >
         <div className="absolute inset-0 bg-black/60" />
         <div className="relative z-10 container mx-auto px-4 text-center">
           <h1 className="font-display text-4xl md:text-6xl text-secondary mb-4">
-            Eventos Realizados
+            {heroTitle}
           </h1>
           <p className="text-lg text-neutral-300">
-            Conocé nuestros trabajos y servicios
+            {heroSubtitle}
           </p>
+          <div className="flex flex-wrap justify-center gap-4 mt-8">
+            {primaryLabel && (
+              <button
+                onClick={() => document.getElementById('eventos-listado')?.scrollIntoView({ behavior: 'smooth' })}
+                className="px-6 py-3 bg-accent text-secondary font-medium rounded hover:bg-accent/90 transition-colors"
+              >
+                {primaryLabel}
+              </button>
+            )}
+            {secondaryLabel && (
+              <button
+                onClick={() => openWhatsApp(secondaryMessage)}
+                className="px-6 py-3 border-2 border-secondary text-secondary font-medium rounded hover:bg-secondary hover:text-primary transition-colors"
+              >
+                {secondaryLabel}
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
-      <div className="container mx-auto px-4 py-12">
+      <div id="eventos-listado" className="container mx-auto px-4 py-12 scroll-mt-24">
         {/* Filtros */}
         <div className="flex flex-wrap gap-2 mb-8">
           {eventTypes.map((type) => (
