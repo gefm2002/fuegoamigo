@@ -180,16 +180,20 @@ export function Admin() {
           .from('fuegoamigo_services')
           .select('*')
           .order('order', { ascending: true });
-        setServices((servicesData || []).map((s: any) => ({
-          id: s.id,
-          slug: s.slug || '',
-          title: s.title,
-          shortDescription: s.short_description || '',
-          longDescription: s.long_description || '',
-          image: s.image || '',
-          isActive: s.is_active !== false,
-          order: s.order || 0,
-        })));
+        const mappedServices = await Promise.all((servicesData || []).map(async (s: any) => {
+          const imageUrl = s.image ? await getImageUrl(s.image) : '';
+          return {
+            id: s.id,
+            slug: s.slug || '',
+            title: s.title,
+            shortDescription: s.short_description || '',
+            longDescription: s.long_description || '',
+            image: imageUrl,
+            isActive: s.is_active !== false,
+            order: s.order || 0,
+          } satisfies Service;
+        }));
+        setServices(mappedServices);
 
         // Events
         const { data: eventsData } = await supabasePublic
@@ -282,16 +286,20 @@ export function Admin() {
         })));
 
         const servicesData = await servicesRes.json();
-        setServices((servicesData || []).map((s: any) => ({
-          id: s.id,
-          slug: s.slug || '',
-          title: s.title,
-          shortDescription: s.short_description || '',
-          longDescription: s.long_description || '',
-          image: s.image || '',
-          isActive: s.is_active !== false,
-          order: s.order || 0,
-        })));
+        const mappedServices = await Promise.all((servicesData || []).map(async (s: any) => {
+          const imageUrl = s.image ? await getImageUrl(s.image) : '';
+          return {
+            id: s.id,
+            slug: s.slug || '',
+            title: s.title,
+            shortDescription: s.short_description || '',
+            longDescription: s.long_description || '',
+            image: imageUrl,
+            isActive: s.is_active !== false,
+            order: s.order || 0,
+          } satisfies Service;
+        }));
+        setServices(mappedServices);
 
         const eventsData = await eventsRes.json();
         const mappedEvents = await Promise.all(eventsData.map(async (e: any) => {
@@ -1461,6 +1469,23 @@ function ServicesSection({
     is_active: true,
     order: 0,
   });
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string>('');
+
+  const validateImageFile = (file: File): { valid: boolean; error?: string } => {
+    const maxSize = 1572864; // 1.5MB
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+    if (file.size > maxSize) {
+      return { valid: false, error: 'El archivo excede el tamaño máximo de 1.5MB' };
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+      return { valid: false, error: 'Tipo de archivo no permitido. Solo JPEG, PNG y WebP' };
+    }
+
+    return { valid: true };
+  };
 
   useEffect(() => {
     if (editingService) {
@@ -1474,6 +1499,7 @@ function ServicesSection({
         is_active: editingService.isActive,
         order: editingService.order || 0,
       });
+      setImagePreview(editingService.image || '');
     } else {
       setFormData({
         title: '',
@@ -1484,16 +1510,76 @@ function ServicesSection({
         is_active: true,
         order: 0,
       });
+      setImagePreview('');
     }
   }, [editingService]);
 
+  const getEntityId = () => {
+    const existingId = formData.id || editingService?.id;
+    if (existingId) return existingId;
+    const newId = globalThis.crypto?.randomUUID?.() ?? `temp-${Date.now()}`;
+    setFormData((prev: any) => ({ ...prev, id: newId }));
+    return newId;
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const entityId = getEntityId();
+      const filename = file.name;
+
+      const signResponse = await apiFetch<{ signedUrl: string; path: string }>('admin-assets-sign-upload', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          entityId,
+          filename,
+          contentType: file.type,
+        }),
+      });
+
+      const uploadResponse = await fetch(signResponse.signedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Error al subir la imagen');
+      }
+
+      setFormData((prev: any) => ({ ...prev, image: signResponse.path }));
+      setImagePreview(URL.createObjectURL(file));
+      alert('Imagen subida exitosamente');
+    } catch (error: any) {
+      console.error('Error uploading image:', error);
+      alert(`Error al subir imagen: ${error.message}`);
+    } finally {
+      setUploadingImage(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
   const handleSave = async () => {
     try {
+      const entityId = getEntityId();
       await apiFetch('admin-services-upsert', {
         method: editingService ? 'PUT' : 'POST',
         token,
         body: JSON.stringify({
           ...formData,
+          id: entityId,
           slug: formData.slug || slugify(formData.title),
           order: Number(formData.order || 0),
         }),
@@ -1572,13 +1658,36 @@ function ServicesSection({
 
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">Imagen (path o URL)</label>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">Imagen</label>
               <input
                 type="text"
                 value={formData.image}
                 onChange={(e) => setFormData({ ...formData, image: e.target.value })}
                 className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
               />
+              <div className="mt-3">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleImageUpload}
+                  disabled={uploadingImage}
+                  className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-secondary"
+                />
+                {uploadingImage && <p className="text-neutral-400 text-sm mt-2">Subiendo imagen...</p>}
+                {(imagePreview || formData.image) && (
+                  <div className="mt-3">
+                    <img
+                      src={imagePreview || formData.image}
+                      alt="Preview"
+                      className="w-full h-32 object-cover rounded border border-neutral-700"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = '/images/logo.svg';
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-neutral-300 mb-2">Orden</label>

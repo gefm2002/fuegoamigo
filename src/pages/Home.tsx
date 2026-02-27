@@ -40,38 +40,45 @@ export function Home() {
           .map((s) => ({
             title: s.title,
             description: s.shortDescription,
-            image: s.image || '/images/gallery-bbq-01.jpg',
+            detail: s.longDescription || s.shortDescription,
+            image: s.image || '/images/logo.svg',
           }))
       : [
           {
             title: 'Catering Social',
             description: 'Eventos sociales, cumples, reuniones. Menús personalizados.',
-            image: '/images/catering-social.jpg',
+            detail: 'Eventos sociales, cumples, reuniones. Menús personalizados.',
+            image: '/images/logo.svg',
           },
           {
             title: 'Catering Corporativo',
             description: 'Lunchs, eventos corporativos, lanzamientos. Servicio completo.',
-            image: '/images/catering-corporativo.jpg',
+            detail: 'Lunchs, eventos corporativos, lanzamientos. Servicio completo.',
+            image: '/images/logo.svg',
           },
           {
             title: 'Producciones',
             description: 'Moda, publicidad, sets. Boxes y servicio en locación.',
-            image: '/images/catering-produccion.jpg',
+            detail: 'Moda, publicidad, sets. Boxes y servicio en locación.',
+            image: '/images/logo.svg',
           },
           {
             title: 'Foodtruck para Eventos',
             description: 'Foodtruck para ferias, eventos al aire libre y reuniones grandes.',
-            image: '/images/hero-foodtruck.jpg',
+            detail: 'Foodtruck para ferias, eventos al aire libre y reuniones grandes.',
+            image: '/images/logo.svg',
           },
           {
             title: 'Boxes y Picadas',
             description: 'Boxes a pedido, picadas premium. Retiro o envío.',
-            image: '/images/product-picada-01.jpg',
+            detail: 'Boxes a pedido, picadas premium. Retiro o envío.',
+            image: '/images/logo.svg',
           },
           {
             title: 'Ahumados y Parrilla',
             description: 'Ahumados en vivo, parrilla premium. Servicio completo.',
-            image: '/images/gallery-bbq-01.jpg',
+            detail: 'Ahumados en vivo, parrilla premium. Servicio completo.',
+            image: '/images/logo.svg',
           },
         ];
 
@@ -133,7 +140,7 @@ export function Home() {
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
-                      target.src = '/images/gallery-bbq-01.jpg';
+                      target.src = '/images/logo.svg';
                     }}
                   />
                 </div>
@@ -151,7 +158,7 @@ export function Home() {
                     </button>
                     <button
                       onClick={() => {
-                        setSelectedService(service);
+                        setSelectedService({ title: service.title, description: service.detail });
                         setIsServiceDetailOpen(true);
                       }}
                       className="flex-1 px-4 py-2 border border-neutral-700 text-secondary font-medium rounded hover:bg-neutral-800 transition-colors text-sm"
